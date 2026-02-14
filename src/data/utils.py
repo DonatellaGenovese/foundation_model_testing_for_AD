@@ -189,15 +189,64 @@ def move_to_eos(local_dir: str, eos_dir: str):
     except Exception as e:
         print(f"⚠️ Move failed: {e}")
 
-def load_global_filelist() -> dict:
-    """Load the precomputed file event counts JSON from nEvents_scan."""
-    base_path = Path("/afs/.cern.ch/work/p/phploner/foundation_model_testing/src/utils/nEvents_scan/file_event_counts.json")
-    if not base_path.exists():
-        raise FileNotFoundError(f"Global file list not found: {base_path}")
-    with open(base_path) as f:
-        data = json.load(f)
-    print(f"🟢 Loaded global file list ({sum(len(v) for v in data.values())} files) from {base_path}")
-    return data
+def load_global_filelist(cfg=None) -> dict:
+    """
+    Load the precomputed file event counts JSON.
+
+    Args:
+        cfg: Hydra config with data_sources.event_counts_json path
+             If None, falls back to default local/CERN search
+
+    Returns:
+        Dictionary mapping folder_name -> {filename: event_count}
+    """
+    from pathlib import Path
+    import json
+
+    # Try to get path from config first
+    if cfg is not None and hasattr(cfg, 'data_sources'):
+        json_path = Path(cfg.data_sources.event_counts_json)
+        if json_path.exists():
+            with open(json_path) as f:
+                data = json.load(f)
+            print(f"🟢 Loaded event counts from config: {json_path}")
+            return data
+        else:
+            print(f"⚠️  Config path not found: {json_path}, trying fallback...")
+            if hasattr(cfg.data_sources, 'event_counts_json_fallback'):
+                fallback_path = Path(cfg.data_sources.event_counts_json_fallback)
+                if fallback_path.exists():
+                    with open(fallback_path) as f:
+                        data = json.load(f)
+                    print(f"🟢 Loaded event counts from fallback: {fallback_path}")
+                    return data
+
+    # Fallback to old behavior: try local then CERN
+    local_path = Path("src/utils/nEvents_scan/file_event_counts_local.json")
+
+    if local_path.exists():
+        with open(local_path) as f:
+            data = json.load(f)
+        print(f"🟢 Loaded LOCAL file list ({sum(len(v) for v in data.values())} files) from {local_path}")
+        return data
+
+    # Try CERN path (relative, not absolute)
+    cern_path = Path("src/utils/nEvents_scan/file_event_counts.json")
+    if cern_path.exists():
+        with open(cern_path) as f:
+            data = json.load(f)
+        print(f"🟢 Loaded CERN file list ({sum(len(v) for v in data.values())} files) from {cern_path}")
+        return data
+
+    raise FileNotFoundError(
+        f"Event count JSON not found. Tried:\n"
+        f"  1. Config path (if provided)\n"
+        f"  2. {local_path}\n"
+        f"  3. {cern_path}\n"
+        f"Please run: python src/utils/nEvents_scan/scan_parquet_nevent.py --local"
+    )
+
+
 
 def make_split_manifest(global_filelist, split_counts, include_folders, seed=42):
     """
@@ -413,7 +462,8 @@ def has_enough_events(
     train_val_test_split_per_class,
     classnames,
     folder_map,
-    event_count_json_path="src/utils/nEvents_scan/file_event_counts.json",
+    event_count_json_path=None,
+    cfg=None,  # ADD THIS
 ) -> bool:
     """
     Returns True only if all splits/classes meet required total events
@@ -424,10 +474,32 @@ def has_enough_events(
         classnames: list like ["QCD", "ggHbb"]
         folder_map: mapping class_name -> folder name used in vectorized dir
         event_count_json_path: path to JSON with event counts per parquet file
+        cfg: Hydra config (NEW - to get path from config)
     """
+    import os
+    import json
 
     if not target or not os.path.exists(target):
         return False
+
+    # MODIFIED: Try to get path from config first
+    if event_count_json_path is None:
+        if cfg is not None and hasattr(cfg, 'data_sources'):
+            event_count_json_path = cfg.data_sources.event_counts_json
+            print(f"🟢 Using event counts from config: {event_count_json_path}")
+        else:
+            # Fallback to auto-detection
+            local_path = "src/utils/nEvents_scan/file_event_counts_local.json"
+            cern_path = "src/utils/nEvents_scan/file_event_counts.json"
+
+            if os.path.exists(local_path):
+                event_count_json_path = local_path
+                print(f"🟢 Using LOCAL event counts: {local_path}")
+            elif os.path.exists(cern_path):
+                event_count_json_path = cern_path
+                print(f"🔬 Using CERN event counts: {cern_path}")
+            else:
+                raise FileNotFoundError("No event count file found (local or CERN)")
 
     # Load event count database
     if not os.path.exists(event_count_json_path):

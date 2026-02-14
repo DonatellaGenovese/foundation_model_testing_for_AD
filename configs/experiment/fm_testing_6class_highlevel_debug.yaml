@@ -11,12 +11,12 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["collide2v", "tinyTransformer", "18class"]
+tags: ["collide2v", "tinyTransformer", "6class"]
 
 data:
-  batch_size: 2048
-  train_val_test_split_per_class: [1_000_000, 100_000, 100_000]
-  label: "v2_18class_highlevel"
+  batch_size: 128
+  train_val_test_split_per_class: [8000, 2000, 2000]
+  label: "v2_6class_highlevel"
   num_workers: 4
   to_classify:
     - "QCD_inclusive"
@@ -33,8 +33,7 @@ data:
         - FullReco_JetPuppiAK4_Phi
         - FullReco_JetPuppiAK4_Mass
         - FullReco_JetPuppiAK4_BTag
-        - FullReco_JetPuppiAK4_NCharged
-        - FullReco_JetPuppiAK4_NNeutrals
+        - FullReco_JetPuppiAK4_Charge
       topk: 12
       count: true
 
@@ -43,11 +42,8 @@ data:
         - FullReco_Electron_PT
         - FullReco_Electron_Eta
         - FullReco_Electron_Phi
-        - FullReco_Electron_Charge
         - FullReco_Electron_EhadOverEem
         - FullReco_Electron_IsolationVarRhoCorr
-        - FullReco_Electron_D0
-        - FullReco_Electron_DZ
       topk: 8
       count: false
 
@@ -56,10 +52,7 @@ data:
         - FullReco_MuonTight_PT
         - FullReco_MuonTight_Eta
         - FullReco_MuonTight_Phi
-        - FullReco_MuonTight_Charge
         - FullReco_MuonTight_IsolationVarRhoCorr
-        - FullReco_MuonTight_D0
-        - FullReco_MuonTight_DZ
       topk: 8
       count: false
 
@@ -68,8 +61,6 @@ data:
         - FullReco_PhotonTight_PT
         - FullReco_PhotonTight_Eta
         - FullReco_PhotonTight_Phi
-        - FullReco_PhotonTight_EhadOverEem
-        - FullReco_PhotonTight_IsolationVarRhoCorr
       topk: 8
       count: false
 

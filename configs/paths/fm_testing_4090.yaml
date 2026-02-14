@@ -1,0 +1,25 @@
+# path to root directory
+# this requires PROJECT_ROOT environment variable to exist
+# you can replace it with "." if you want the root to be the current working directory
+root_dir: ${oc.env:PROJECT_ROOT}
+
+# path to dataset directory
+dataset_dir: /home/dongen/Collide2V/CollideMini
+
+# path to tmp data directory for writing vectorized and preprocessed data
+tmp_data_dir: /tmp/collide_mini_tmp
+
+# path to eos data directory for storing vectorized and preprocessed data
+eos_data_dir: /home/dongen/Collide2V/CollideMini_processed
+
+# path to logging directory
+log_dir: ${paths.root_dir}/logs/
+
+# path to output directory, created dynamically by hydra
+# path generation pattern is specified in `configs/hydra/default.yaml`
+# use it to store all files generated during the run, like ckpts and metrics
+output_dir: ${hydra:runtime.output_dir}
+
+# path to working directory
+work_dir: ${hydra:runtime.cwd}
+

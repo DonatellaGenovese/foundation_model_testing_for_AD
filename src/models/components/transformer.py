@@ -148,7 +148,7 @@ class TinyTransformer(nn.Module):
             type_emb = self.type_embedding(
                 torch.full((B, num_tokens), type_id, device=x.device, dtype=torch.long)
             )
-            #proj = proj + 0.1 * type_emb
+            proj = proj + type_emb
 
             all_tokens.append(proj)
 
@@ -169,11 +169,51 @@ class TinyTransformer(nn.Module):
         event_type_emb = self.type_embedding(
             torch.full((B, 1), event_type_id, device=x.device, dtype=torch.long)
         )
-        #event_token = event_token + 0.1 * event_type_emb
+        event_token = event_token + event_type_emb
 
         # ---- Concatenate tokens ----
         tokens = torch.cat([event_token] + all_tokens, dim=1)  # (B, total_tokens, d_model)
         return tokens
+    
+    
+    def get_embeddings(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Extract encoder embeddings WITHOUT passing through classification head.
+        
+        This method is used for:
+        1. Contrastive learning (SupCon) - get embeddings before projection
+        2. Inference after training - extract representations for clustering/anomaly detection
+        
+        Args:
+            x: Input tensor [batch_size, feature_dim]
+               This is the same flat concatenated tensor used in forward()
+        
+        Returns:
+            embeddings: [batch_size, d_model]
+                       Global representation of the event (mean pooled over all tokens)
+        
+        Process:
+            1. Tokenize the flat input into particle tokens
+            2. Pass through transformer encoder
+            3. Global average pooling → single vector per event
+        """
+        # Step 1: Tokenize (same as forward)
+        tokens = self.tokenize(x)  # [batch_size, total_tokens, d_model]
+        
+        # Step 2: Normalize
+        tokens = self.input_norm(tokens)
+        
+        # Step 3: Pass through transformer encoder
+        enc = self.encoder(tokens)  # [batch_size, total_tokens, d_model]
+        
+        # Step 4: Global average pooling over all tokens
+        # This gives us a single vector per event
+        embeddings = enc.mean(dim=1)  # [batch_size, d_model]
+        
+        return embeddings
+    
+    
+    
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         tokens = self.tokenize(x)

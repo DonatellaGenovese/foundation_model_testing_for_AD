@@ -1,0 +1,17 @@
+# @package _global_
+
+# LOCAL data sources configuration (for your 4090 machine with CollideMini)
+
+data_sources:
+  # Event count database
+  event_counts_json: "src/utils/nEvents_scan/file_event_counts_local.json"
+  event_counts_json_fallback: "src/utils/nEvents_scan/file_event_counts.json"
+
+  # Raw dataset base directory
+  raw_data_base_dir: "/hdd3/dongen/Desktop/Collide2v/CollideMini"
+
+  # Use local paths
+  use_local: true
+
+  # Environment identifier
+  environment: "localA6000"

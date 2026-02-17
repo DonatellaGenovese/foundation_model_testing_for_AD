@@ -1,0 +1,111 @@
+# @package _global_
+
+# to execute this experiment run:
+# python src/train.py experiment=vanillasupcon_6class_pretrain paths=fm_testing_4090 data=collide2v_miniA6000
+
+defaults:
+  - override /data: collide2v_basic
+  - override /callbacks: supcon
+  - override /trainer: gpu
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["collide2v", "vanillasupcon", "pretraining", "6class", "metric_learning"]
+
+data:
+  batch_size: 512  # Large batch for contrastive learning
+  train_val_test_split_per_class: [24000, 3000, 3000]
+  label: "v2_6class_highlevel"
+  num_workers: 8
+  to_classify:
+    - "QCD_inclusive"
+    - "DY_to_ll"
+    - "Z_to_bb"
+    - "W_to_lv"
+    - "gamma"
+    - "tt_all-lept"
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+      topk: 12
+      count: true
+
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+      topk: 8
+      count: false
+
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null   # scalar values
+      count: false
+
+trainer:
+  min_epochs: 10
+  max_epochs: 50
+  gradient_clip_algorithm: norm
+  gradient_clip_val: 1.0
+  #accumulate_grad_batches: 2  # Effective batch = 512 * 2 = 1024
+
+model:
+  _target_: src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule
+  d_model: 512
+  n_heads: 16
+  num_layers: 6
+  d_ff: 2048
+  dropout: 0.1
+  projection_dim: 128
+  hidden_projection_dim: 256
+  temperature: 0.07  # Lowered from 0.1 for harder negative mining
+  use_classification_head: true
+  classification_weight: 0.1
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.0003  # Lowered from 0.001 for more stable training
+    weight_decay: 1e-5  # Increased for better regularization
+  scheduler:
+    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+    _partial_: true
+    T_max: ${trainer.max_epochs}
+    eta_min: 1e-6
+  compile: false
+
+preprocess:
+  enabled: true
+
+logger:
+  mlflow:
+    experiment_name: "supcon_pretraining"
+    run_name: "vanillasupcon_6class_pretrain"

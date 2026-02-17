@@ -1,0 +1,23 @@
+# Callbacks for SupCon training (without MCROC which needs classification probs)
+
+defaults:
+  - model_checkpoint
+  - early_stopping
+  - model_summary
+  - rich_progress_bar
+  - lr_monitor
+
+model_checkpoint:
+  dirpath: ${paths.output_dir}/checkpoints
+  monitor: "val/con_loss"
+  mode: "min"
+  save_top_k: 3
+  save_last: true
+  verbose: true
+  filename: "epoch_{epoch:03d}_val_con_loss_{val/con_loss:.4f}"
+
+early_stopping:
+  monitor: "val/con_loss"
+  patience: 10
+  mode: "min"
+  min_delta: 0.0001

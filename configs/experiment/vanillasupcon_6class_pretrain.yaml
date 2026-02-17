@@ -14,10 +14,10 @@ defaults:
 tags: ["collide2v", "vanillasupcon", "pretraining", "6class", "metric_learning"]
 
 data:
-  batch_size: 512  # Large batch for contrastive learning
-  train_val_test_split_per_class: [24000, 3000, 3000]
+  batch_size: 64  
+  train_val_test_split_per_class: [8000, 2000, 2000]
   label: "v2_6class_highlevel"
-  num_workers: 8
+  num_workers: 0
   to_classify:
     - "QCD_inclusive"
     - "DY_to_ll"

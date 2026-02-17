@@ -2,53 +2,34 @@
   "DYJetsToLL_13TeV-madgraphMLM-pythia8": {
     "DYJetsToLL_13TeV-madgraphMLM-pythia8-NEVENT10000-RS10000002.parquet": 9987,
     "DYJetsToLL_13TeV-madgraphMLM-pythia8-NEVENT10000-RS10000001.parquet": 9991,
-    "DYJetsToLL_13TeV-madgraphMLM-pythia8-NEVENT10000-RS10000008.parquet": 9992,
-    "DYJetsToLL_13TeV-madgraphMLM-pythia8-NEVENT10000-RS10000007.parquet": 9998,
-    "DYJetsToLL_13TeV-madgraphMLM-pythia8-NEVENT10000-RS10000005.parquet": 9992,
     "DYJetsToLL_13TeV-madgraphMLM-pythia8-NEVENT10000-RS10000003.parquet": 9998
   },
   "ZJetsTobb_13TeV-madgraphMLM-pythia8": {
     "ZJetsTobb_13TeV-madgraphMLM-pythia8-NEVENT10000-RS52000003.parquet": 9982,
-    "ZJetsTobb_13TeV-madgraphMLM-pythia8-NEVENT10000-RS52000005.parquet": 9984,
-    "ZJetsTobb_13TeV-madgraphMLM-pythia8-NEVENT10000-RS52000006.parquet": 9984,
-    "ZJetsTobb_13TeV-madgraphMLM-pythia8-NEVENT10000-RS52000002.parquet": 9976,
     "ZJetsTobb_13TeV-madgraphMLM-pythia8-NEVENT10000-RS52000001.parquet": 9979,
-    "ZJetsTobb_13TeV-madgraphMLM-pythia8-NEVENT10000-RS52000004.parquet": 9972
+    "ZJetsTobb_13TeV-madgraphMLM-pythia8-NEVENT10000-RS52000002.parquet": 9976
   },
   "WJetsToLNu_13TeV-madgraphMLM-pythia8": {
-    "WJetsToLNu_13TeV-madgraphMLM-pythia8-NEVENT10000-RS44000005.parquet": 9977,
-    "WJetsToLNu_13TeV-madgraphMLM-pythia8-NEVENT10000-RS44000003.parquet": 9970,
-    "WJetsToLNu_13TeV-madgraphMLM-pythia8-NEVENT10000-RS44000004.parquet": 9965,
-    "WJetsToLNu_13TeV-madgraphMLM-pythia8-NEVENT10000-RS44000006.parquet": 9958,
+    "WJetsToLNu_13TeV-madgraphMLM-pythia8-NEVENT10000-RS44000002.parquet": 9970,
     "WJetsToLNu_13TeV-madgraphMLM-pythia8-NEVENT10000-RS44000001.parquet": 9978,
-    "WJetsToLNu_13TeV-madgraphMLM-pythia8-NEVENT10000-RS44000002.parquet": 9970
+    "WJetsToLNu_13TeV-madgraphMLM-pythia8-NEVENT10000-RS44000003.parquet": 9970
   },
   "gamma": {
-    "gamma-NEVENT10000-RS11000013.parquet": 9986,
-    "gamma-NEVENT10000-RS11000007.parquet": 8094,
-    "gamma-NEVENT10000-RS11000003.parquet": 9974,
-    "gamma-NEVENT10000-RS11000002.parquet": 9984,
     "gamma-NEVENT10000-RS11000001.parquet": 9978,
-    "gamma-NEVENT10000-RS11000009.parquet": 9972
+    "gamma-NEVENT10000-RS11000003.parquet": 9974,
+    "gamma-NEVENT10000-RS11000002.parquet": 9984
   },
   "QCD_HT50toInf": {
-    "QCD_HT50toInf-NEVENT10000-RS26000005.parquet": 8209,
-    "QCD_HT50toInf-NEVENT10000-RS26000001.parquet": 8221,
     "QCD_HT50toInf-NEVENT10000-RS26000002.parquet": 8297,
-    "QCD_HT50toInf-NEVENT10000-RS26000006.parquet": 4537,
     "QCD_HT50toInf-NEVENT10000-RS26000003.parquet": 8215,
-    "QCD_HT50toInf-NEVENT10000-RS26000004.parquet": 8161
+    "QCD_HT50toInf-NEVENT10000-RS26000001.parquet": 8221
   },
   "tt0123j_5f_ckm_LO_MLM_leptonic": {
-    "tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000004.parquet": 9834,
-    "tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000006.parquet": 9816,
-    "tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000005.parquet": 9809,
-    "tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000002.parquet": 9818,
+    "tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000001.parquet": 9803,
     "tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000003.parquet": 9802,
-    "tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000001.parquet": 9803
+    "tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000002.parquet": 9818
   },
   "HH_4b": {
-    "HH_4b-NEVENT10000-RS20000002.parquet": 9992,
     "HH_4b-NEVENT10000-RS20000001.parquet": 9992
   }
 }

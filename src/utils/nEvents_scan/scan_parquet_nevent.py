@@ -85,7 +85,7 @@ def load_config_for_scan(config_name: str = "local"):
     Load data sources config for scanning.
 
     Args:
-        config_name: 'local' or 'cern'
+        config_name: 'local4090' or 'cern' or 'localA6000'
 
     Returns:
         dict with base_dir, process_to_folder, output_json, n_workers
@@ -96,14 +96,16 @@ def load_config_for_scan(config_name: str = "local"):
     if not config_path.exists():
         raise FileNotFoundError(
             f"Config not found: {config_path}\n"
-            f"Available: configs/data_sources/local.yaml or cern.yaml"
+            f"Available: configs/data_sources/local.yaml or cern.yaml or localA6000.yaml"
         )
 
     ds_cfg = OmegaConf.load(config_path)
 
     # Load data config to get process_to_folder mapping
-    if config_name == "local":
+    if config_name == "local4090":
         data_cfg_path = "configs/data/collide2v_mini4090.yaml"
+    elif config_name == "localA6000":
+        data_cfg_path = "configs/data/collide2v_miniA6000.yaml"
     else:
         data_cfg_path = "configs/data/collide2v_basic.yaml"
 
@@ -113,7 +115,7 @@ def load_config_for_scan(config_name: str = "local"):
         "base_dir": ds_cfg.data_sources.raw_data_base_dir,
         "process_to_folder": data_cfg.process_to_folder,
         "output_json": ds_cfg.data_sources.event_counts_json,
-        "n_workers": 8 if config_name == "local" else 16,
+        "n_workers": 8 if config_name == "local4090" or config_name == "localA6000" else 16,
         "environment": config_name
     }
 
@@ -124,7 +126,7 @@ if __name__ == "__main__":
 
     # Check for config-based mode
     use_config = False
-    config_name = "local"
+    config_name = "local4090"
 
     for arg in args:
         if arg.startswith("data_sources="):
@@ -161,6 +163,6 @@ if __name__ == "__main__":
             print(f"❌ Error: {e}")
             print()
             print("Usage:")
-            print("  python scan_parquet_nevent.py data_sources=local")
+            print("  python scan_parquet_nevent.py data_sources=local4090")
             print("  python scan_parquet_nevent.py data_sources=cern")
             sys.exit(1)

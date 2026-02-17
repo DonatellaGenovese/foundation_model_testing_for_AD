@@ -14,4 +14,4 @@ data_sources:
   use_local: true
 
   # Environment identifier
-  environment: "local"
+  environment: "local4090"

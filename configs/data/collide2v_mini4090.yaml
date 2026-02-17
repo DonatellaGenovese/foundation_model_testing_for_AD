@@ -1,7 +1,7 @@
 defaults:
-  - /data_sources: local  # or 'cern' for CERN environment
+  - /data_sources: local4090  # or 'cern' for CERN environment
 _target_: src.data.collide2v_datamodule.COLLIDE2VDataModule
-batch_size: 1024 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+batch_size: 128 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
 train_val_test_split_per_class: [13968, 2993, 2993]
 num_workers: 4
 pin_memory: true

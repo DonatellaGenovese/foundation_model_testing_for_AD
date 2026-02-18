@@ -45,7 +45,7 @@ class ProjectionHead(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            #nn.BatchNorm1d(hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, output_dim),
             # Note: No activation on final layer - embeddings are L2 normalized later
@@ -91,13 +91,15 @@ class SupConLoss(nn.Module):
         super().__init__()
         self.temperature = temperature
     
-    def forward(self, features: torch.Tensor, labels: torch.Tensor, strict_multi_class: bool = True) -> torch.Tensor:
+    def forward(self, features: torch.Tensor, labels: torch.Tensor, strict_multi_class: bool = True, debug: bool = False) -> torch.Tensor:
         """
         Compute supervised contrastive loss.
         
         Args:
             features: L2-normalized projections [batch_size, embedding_dim]
             labels: Class labels [batch_size]
+            strict_multi_class: If True, raise error on single-class batch; if False, return 0 loss
+            debug: If True, print debug information
         
         Returns:
             Scalar loss value
@@ -111,17 +113,35 @@ class SupConLoss(nn.Module):
         # Ensure labels is proper shape [B, 1]
         labels = labels.contiguous().view(-1, 1)
         
+        # DEBUG: Check for single-class batches
+        unique_classes = torch.unique(labels)
+        num_classes_in_batch = len(unique_classes)
+        
+        if debug:
+            print(f"\n[SupConLoss DEBUG]")
+            print(f"  Batch size: {batch_size}")
+            print(f"  Num unique classes: {num_classes_in_batch}")
+            print(f"  Classes: {unique_classes.cpu().numpy()}")
+            print(f"  Features shape: {features.shape}")
+            print(f"  Features norm (should be ~1.0): min={features.norm(dim=1).min():.4f}, max={features.norm(dim=1).max():.4f}")
+        
         # Create positive pairs mask: mask[i,j] = 1 if labels[i] == labels[j]
         # This is a [B, B] matrix where entry (i,j) is 1 if same class, 0 otherwise
         mask = torch.eq(labels, labels.T).float().to(device)  # [B, B]
 
         # SupCon needs both positives and negatives in-batch to learn class separation.
         # If a batch contains a single class only, contrastive learning degenerates.
-        if strict_multi_class and torch.unique(labels).numel() < 2:
-            raise ValueError(
-                "SupConLoss received a single-class batch. "
-                "Need at least 2 classes per batch for meaningful contrastive learning."
-            )
+        if num_classes_in_batch < 2:
+            if strict_multi_class:
+                raise ValueError(
+                    "SupConLoss received a single-class batch. "
+                    "Need at least 2 classes per batch for meaningful contrastive learning."
+                )
+            else:
+                if debug:
+                    print(f"  [WARNING] Single-class batch detected! Returning zero loss.")
+                # Return zero loss but keep gradient flow
+                return torch.tensor(0.0, device=device, requires_grad=True)
         
         # Compute similarity matrix: dot product between all pairs
         # Since features are L2-normalized, this gives cosine similarity
@@ -142,12 +162,20 @@ class SupConLoss(nn.Module):
         # Apply mask: only keep non-diagonal elements
         mask = mask * logits_mask  # Positive pairs (excluding self)
         
+        if debug:
+            print(f"  Positive pairs per sample: min={mask.sum(1).min().item():.0f}, max={mask.sum(1).max().item():.0f}, mean={mask.sum(1).float().mean().item():.2f}")
+            print(f"  Similarity (before temp): min={similarity_matrix.min().item():.4f}, max={similarity_matrix.max().item():.4f}")
+            print(f"  Similarity / T: min={logits.min().item():.4f}, max={logits.max().item():.4f}")
+        
         # Compute log probability for each positive pair
         # Numerator: similarity to positive
         # Denominator: sum of similarities to all samples (except self)
         log_prob = logits / self.temperature - torch.log(
             (exp_logits * logits_mask).sum(1, keepdim=True) + 1e-9  # Add epsilon for stability
         )
+        
+        if debug:
+            print(f"  Log prob: min={log_prob.min().item():.4f}, max={log_prob.max().item():.4f}")
         
         # Compute mean log-likelihood over positive pairs
         # For each sample, sum over all its positive pairs and normalize by count
@@ -160,8 +188,17 @@ class SupConLoss(nn.Module):
         # Sum log probabilities over positives and normalize
         mean_log_prob_pos = (mask * log_prob).sum(1) / mask_sum
         
+        if debug:
+            print(f"  Mean log prob pos: min={mean_log_prob_pos.min().item():.4f}, max={mean_log_prob_pos.max().item():.4f}")
+        
         # Loss is negative mean log-likelihood (we want to maximize likelihood)
-        loss = -mean_log_prob_pos.mean()
+        # NOTE: This returns a SCALAR loss (mean over batch)
+        loss_per_sample = -mean_log_prob_pos
+        loss = loss_per_sample.mean()
+        
+        if debug:
+            print(f"  Loss per sample: min={loss_per_sample.min().item():.4f}, max={loss_per_sample.max().item():.4f}, mean={loss_per_sample.mean().item():.4f}")
+            print(f"  Final loss (scalar): {loss.item():.4f}")
         
         return loss
 
@@ -231,27 +268,34 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
 
         return embeddings, projections, logits
 
-    def model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def model_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int = 0) -> Dict[str, torch.Tensor]:
         x, labels = batch
         embeddings, projections, logits = self.forward(x)
 
         unique_classes = torch.unique(labels).numel()
         is_single_class_batch = unique_classes < 2
+        
+        # DEBUG: Print on first batch
+        debug_loss = (batch_idx == 0 and self.training)
 
         if is_single_class_batch and self.hparams.allow_single_class_batches:
-            contrastive_loss = projections.new_zeros(())
+            contrastive_loss = projections.new_zeros((), requires_grad=True)
+            if debug_loss:
+                print(f"\n[VanillaSupCon] Single-class batch detected. Returning zero loss.")
         else:
             contrastive_loss = self.contrastive_criterion(
                 projections,
                 labels,
                 strict_multi_class=self.training,
+                debug=debug_loss,
             )
 
         result = {
             "contrastive_loss": contrastive_loss,
             "embeddings": embeddings,
             "projections": projections,
-            "single_class_batch": torch.tensor(
+            "num_classes_in_batch": torch.tensor(unique_classes, device=labels.device),
+            "is_single_class": torch.tensor(
                 1.0 if is_single_class_batch else 0.0,
                 device=labels.device,
             ),
@@ -291,7 +335,7 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
         x, labels = batch
-        outputs = self.model_step(batch)
+        outputs = self.model_step(batch, batch_idx=batch_idx)
 
         if batch_idx == 0 and self._setup_calls_to_log is not None:
             self.log("debug/setup_calls", self._setup_calls_to_log, on_step=False, on_epoch=True)
@@ -308,16 +352,26 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         self.train_contrastive_loss(outputs["contrastive_loss"])
         self.log("train/con_loss", self.train_contrastive_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/loss", loss, on_step=False, on_epoch=True)
-        self.log("debug/single_class_batch", outputs["single_class_batch"], on_step=True, on_epoch=True)
+        
+        # Log batch statistics
+        self.log("debug/num_classes_in_batch", outputs["num_classes_in_batch"], on_step=True, on_epoch=True)
+        self.log("debug/single_class_batch", outputs["is_single_class"], on_step=True, on_epoch=True)
 
         if batch_idx == 0:
             self._log_debug_batch_stats(labels, outputs)
+            # Log projection norms
+            self.log("debug/proj_norm_min", outputs["projections"].norm(dim=1).min(), on_step=False, on_epoch=True)
+            self.log("debug/proj_norm_max", outputs["projections"].norm(dim=1).max(), on_step=False, on_epoch=True)
+            # Log class distribution
+            unique_labels, counts = torch.unique(labels, return_counts=True)
+            self.log("debug/min_samples_per_class", counts.min().float(), on_step=False, on_epoch=True)
+            self.log("debug/max_samples_per_class", counts.max().float(), on_step=False, on_epoch=True)
 
         return loss
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         x, labels = batch
-        outputs = self.model_step(batch)
+        outputs = self.model_step(batch, batch_idx=batch_idx)
 
         loss = outputs["contrastive_loss"]
         if self.hparams.use_classification_head and "classification_loss" in outputs:
@@ -330,11 +384,14 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         self.val_contrastive_loss(outputs["contrastive_loss"])
         self.log("val/con_loss", self.val_contrastive_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/loss", loss, on_step=False, on_epoch=True)
-        self.log("val/single_class_batch", outputs["single_class_batch"], on_step=False, on_epoch=True)
+        
+        # Log batch statistics
+        self.log("debug/val_num_classes_in_batch", outputs["num_classes_in_batch"], on_step=False, on_epoch=True)
+        self.log("debug/val_single_class_batch", outputs["is_single_class"], on_step=False, on_epoch=True)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         x, labels = batch
-        outputs = self.model_step(batch)
+        outputs = self.model_step(batch, batch_idx=batch_idx)
 
         loss = outputs["contrastive_loss"]
         self.log("test/con_loss", outputs["contrastive_loss"], on_step=False, on_epoch=True, prog_bar=True)
@@ -347,7 +404,7 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
             self.log("test/acc", test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
         self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self.log("test/single_class_batch", outputs["single_class_batch"], on_step=False, on_epoch=True)
+        self.log("test/single_class_batch", outputs["is_single_class"], on_step=False, on_epoch=True)
         return {"loss": loss}
 
     def on_after_backward(self) -> None:

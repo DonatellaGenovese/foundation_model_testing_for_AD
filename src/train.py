@@ -84,6 +84,25 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
     trainer: Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)
 
+    # ============================================================
+    # GPU VERIFICATION LOGGING
+    # ============================================================
+    log.info("=" * 80)
+    log.info("GPU CONFIGURATION:")
+    log.info(f"  • CUDA Available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        log.info(f"  • GPU Count: {torch.cuda.device_count()}")
+        log.info(f"  • Current Device: {torch.cuda.current_device()}")
+        log.info(f"  • Device Name: {torch.cuda.get_device_name(0)}")
+        log.info(f"  • CUDA Version: {torch.version.cuda}")
+    log.info(f"  • Trainer Accelerator: {trainer.accelerator.__class__.__name__}")
+    log.info(f"  • Trainer Strategy: {trainer.strategy.__class__.__name__}")
+    log.info(f"  • Number of Devices: {trainer.num_devices}")
+    if hasattr(cfg.trainer, 'precision'):
+        log.info(f"  • Precision: {cfg.trainer.precision}")
+    log.info("=" * 80)
+    # ============================================================
+
     object_dict = {
         "cfg": cfg,
         "datamodule": datamodule,

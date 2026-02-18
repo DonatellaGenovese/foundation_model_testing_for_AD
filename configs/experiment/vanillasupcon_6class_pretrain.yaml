@@ -14,8 +14,8 @@ defaults:
 tags: ["collide2v", "vanillasupcon", "pretraining", "6class", "metric_learning"]
 
 data:
-  batch_size: 64  
-  train_val_test_split_per_class: [8000, 2000, 2000]
+  batch_size: 1024  
+  train_val_test_split_per_class: [100000, 10000, 10000]
   label: "v2_6class_highlevel"
   num_workers: 0
   to_classify:
@@ -72,8 +72,8 @@ data:
       count: false
 
 trainer:
-  min_epochs: 10
-  max_epochs: 50
+  min_epochs: 2
+  max_epochs: 10
   gradient_clip_algorithm: norm
   gradient_clip_val: 1.0
   #accumulate_grad_batches: 2  # Effective batch = 512 * 2 = 1024
@@ -93,7 +93,7 @@ model:
   optimizer:
     _target_: torch.optim.AdamW
     _partial_: true
-    lr: 0.0003  # Lowered from 0.001 for more stable training
+    lr: 0.0003
     weight_decay: 1e-5  # Increased for better regularization
   scheduler:
     _target_: torch.optim.lr_scheduler.CosineAnnealingLR

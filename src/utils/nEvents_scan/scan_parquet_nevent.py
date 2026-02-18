@@ -4,8 +4,9 @@ Scan all parquet files under each process folder and record their number of even
 
 Usage:
     # Use config (recommended):
-    python scan_parquet_nevent.py data_sources=local
+    python scan_parquet_nevent.py data_sources=local4090
     python scan_parquet_nevent.py data_sources=cern
+    python scan_parquet_nevent.py data_sources=cineca
 
     # Legacy mode (still works):
     python scan_parquet_nevent.py --local
@@ -85,7 +86,7 @@ def load_config_for_scan(config_name: str = "local"):
     Load data sources config for scanning.
 
     Args:
-        config_name: 'local4090' or 'cern' or 'localA6000'
+        config_name: 'local4090' or 'cern' or 'localA6000' or 'cineca'
 
     Returns:
         dict with base_dir, process_to_folder, output_json, n_workers
@@ -96,7 +97,7 @@ def load_config_for_scan(config_name: str = "local"):
     if not config_path.exists():
         raise FileNotFoundError(
             f"Config not found: {config_path}\n"
-            f"Available: configs/data_sources/local.yaml or cern.yaml or localA6000.yaml"
+            f"Available: configs/data_sources/local4090.yaml, cern.yaml, localA6000.yaml, or cineca.yaml"
         )
 
     ds_cfg = OmegaConf.load(config_path)
@@ -106,6 +107,8 @@ def load_config_for_scan(config_name: str = "local"):
         data_cfg_path = "configs/data/collide2v_mini4090.yaml"
     elif config_name == "localA6000":
         data_cfg_path = "configs/data/collide2v_miniA6000.yaml"
+    elif config_name == "cineca":
+        data_cfg_path = "configs/data/collide2v_minicineca.yaml"
     else:
         data_cfg_path = "configs/data/collide2v_basic.yaml"
 
@@ -165,4 +168,5 @@ if __name__ == "__main__":
             print("Usage:")
             print("  python scan_parquet_nevent.py data_sources=local4090")
             print("  python scan_parquet_nevent.py data_sources=cern")
+            print("  python scan_parquet_nevent.py data_sources=cineca")
             sys.exit(1)

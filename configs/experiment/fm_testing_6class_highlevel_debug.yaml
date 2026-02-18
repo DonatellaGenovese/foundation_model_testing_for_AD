@@ -14,8 +14,8 @@ defaults:
 tags: ["collide2v", "tinyTransformer", "6class"]
 
 data:
-  batch_size: 64
-  train_val_test_split_per_class: [8000, 2000, 2000]
+  batch_size: 128
+  train_val_test_split_per_class: [100000, 10000, 10000]
   label: "v2_6class_highlevel"
   num_workers: 4
   to_classify:

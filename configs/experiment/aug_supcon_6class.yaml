@@ -1,0 +1,172 @@
+# @package _global_
+
+# Experiment: Augmented Supervised Contrastive Learning for 6-class classification
+# Uses random masking augmentation for robust representation learning
+
+defaults:
+  - override /data: collide2v_minicineca
+  - override /model: augmented_supcon
+  - override /callbacks: supcon
+  - override /trainer: gpu
+
+tags: ["collide2v", "augmented_supcon", "6class", "masking"]
+
+# ============================================================
+# DATA CONFIGURATION
+# ============================================================
+data:
+  batch_size: 1024  
+  train_val_test_split_per_class: [100000, 10000, 10000]
+  label: "v2_6class_highlevel"
+  num_workers: 0
+  to_classify:
+    - "QCD_inclusive"
+    - "DY_to_ll"
+    - "Z_to_bb"
+    - "W_to_lv"
+    - "gamma"
+    - "tt_all-lept"
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+      topk: 12
+      count: true
+
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+      topk: 8
+      count: false
+
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null   # scalar values
+      count: false
+
+# ============================================================
+# MODEL CONFIGURATION
+# ============================================================
+model:
+  # Architecture
+  d_model: 512
+  n_heads: 8
+  num_layers: 4
+  d_ff: 256
+  dropout: 0.1
+  
+  # Projection head
+  projection_dim: 128
+  hidden_projection_dim: 256
+  
+  # Augmentation
+  mask_probability: 0.2      # Try 0.1, 0.2, 0.3, 0.5
+  mask_full_particle: false  # Try true for particle-level masking
+  num_augmentations: 2
+  
+  # Loss
+  temperature: 0.07          # Try 0.05, 0.07, 0.1
+  
+  # Classification head (for monitoring)
+  use_classification_head: true
+  classification_weight: 0.1
+  
+  # Optimizer
+  optimizer:
+    lr: 2e-4
+    weight_decay: 1e-2
+
+# ============================================================
+# TRAINER CONFIGURATION
+# ============================================================
+trainer:
+  max_epochs: 50
+  accelerator: gpu
+  devices: 1
+  precision: bf16-mixed
+  
+  # Validation
+  check_val_every_n_epoch: 1
+  
+  # Gradient clipping (optional, helps stability)
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: norm
+
+# ============================================================
+# CALLBACKS
+# ============================================================
+callbacks:
+  model_checkpoint:
+    monitor: "val/con_loss"  # Monitor contrastive loss
+    mode: "min"
+    save_top_k: 3
+    save_last: true
+    filename: "epoch_{epoch:03d}_val_loss_{val/con_loss:.4f}"
+  
+  early_stopping:
+    monitor: "val/con_loss"
+    patience: 10
+    mode: "min"
+
+# ============================================================
+# NOTES ON HYPERPARAMETER TUNING
+# ============================================================
+# Key hyperparameters to tune:
+#
+# 1. mask_probability (0.1-0.5):
+#    - Lower: less aggressive augmentation, easier task
+#    - Higher: more aggressive, more robust but harder to train
+#    - Start with 0.2, increase if overfitting
+#
+# 2. temperature (0.05-0.1):
+#    - Lower: harder negative mining, steeper gradients
+#    - Higher: softer contrasts, more stable training
+#    - Start with 0.07
+#
+# 3. mask_full_particle (true/false):
+#    - false: mask individual features (more aggressive)
+#    - true: mask entire particles (more realistic for detector)
+#
+# 4. classification_weight (0.0-0.5):
+#    - 0.0: pure contrastive learning
+#    - 0.1-0.2: light supervision, helps monitoring
+#    - 0.5+: risk of overfitting to classification
+#
+# 5. Learning rate (1e-4 to 5e-4):
+#    - Contrastive learning generally needs lower LR than classification
+
+# ============================================================
+# LOGGER
+# ============================================================
+logger:
+  mlflow:
+    experiment_name: "augmented_supcon"
+    run_name: "aug_supcon_6class"

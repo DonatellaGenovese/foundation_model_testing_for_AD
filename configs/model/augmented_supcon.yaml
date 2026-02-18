@@ -1,0 +1,74 @@
+# Configuration for Augmented Supervised Contrastive Learning (Aug-SupCon)
+# This model uses random masking augmentation for robust representation learning
+
+_target_: src.models.collide2v_augmented_supcon.COLLIDE2VAugmentedSupConLitModule
+
+# ============================================================
+# ENCODER ARCHITECTURE (TinyTransformer)
+# ============================================================
+d_model: 512  # Hidden dimension
+n_heads: 8    # Number of attention heads (must divide d_model)
+num_layers: 4 # Number of transformer encoder layers
+d_ff: 256     # Feedforward network dimension
+dropout: 0.1  # Dropout probability
+
+# ============================================================
+# PROJECTION HEAD (for contrastive learning)
+# ============================================================
+projection_dim: 128          # Output dimension of projection head (smaller = harder task)
+hidden_projection_dim: 256   # Hidden layer size in projection MLP
+
+# ============================================================
+# AUGMENTATION PARAMETERS
+# ============================================================
+mask_probability: 0.2        # Probability of masking (0.1-0.5 typical)
+                             # Higher = more aggressive augmentation
+mask_full_particle: false    # If true: mask entire particles
+                             # If false: mask individual features
+num_augmentations: 2         # Number of augmented views per sample (typically 2)
+
+# ============================================================
+# CONTRASTIVE LOSS PARAMETERS
+# ============================================================
+temperature: 0.07            # Temperature for SimCLR loss (0.05-0.1 typical)
+                             # Lower = harder negative mining
+                             # Higher = softer contrasts
+
+# ============================================================
+# CLASSIFICATION HEAD (optional, for monitoring)
+# ============================================================
+use_classification_head: true    # Whether to add classification head
+classification_weight: 0.1       # Weight for classification loss (if used)
+                                 # Total loss = contrastive_loss + weight * classification_loss
+
+# ============================================================
+# OPTIMIZATION
+# ============================================================
+compile: false  # PyTorch 2.0+ compile for faster training (bool)
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 2e-4           # Learning rate (2e-4 is good default for contrastive learning)
+  weight_decay: 1e-2 # L2 regularization
+  eps: 1e-08
+  betas: [0.9, 0.999]
+
+# Optional: Learning rate scheduler
+scheduler: null
+
+# Example scheduler (uncomment to use):
+# scheduler:
+#   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+#   _partial_: true
+#   T_max: ${trainer.max_epochs}
+#   eta_min: 1e-6
+
+# Alternative scheduler with warmup:
+# scheduler:
+#   _target_: torch.optim.lr_scheduler.OneCycleLR
+#   _partial_: true
+#   max_lr: 2e-3
+#   total_steps: ${trainer.max_epochs}
+#   pct_start: 0.1
+#   anneal_strategy: cos

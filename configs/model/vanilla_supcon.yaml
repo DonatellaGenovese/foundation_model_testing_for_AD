@@ -1,0 +1,36 @@
+_target_: src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule
+
+# Encoder (TinyTransformer)
+d_model: 512
+n_heads: 8
+num_layers: 6
+d_ff: 2048
+dropout: 0.1
+
+# Projection head (for contrastive learning)
+hidden_projection_dim: 256
+projection_dim: 128
+
+# Classification head (optional, for monitoring)
+use_classification_head: false  # Set to false for pure contrastive learning
+classification_weight: 0.1
+
+# SupCon Loss
+temperature: 0.1
+allow_single_class_batches: true  # Allow single-class batches (return 0 loss)
+
+# Optimizer
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.0001
+  weight_decay: 0.01
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  _partial_: true
+  T_max: 100
+  eta_min: 0.00001
+
+# Compile model (PyTorch 2.0+)
+compile: false

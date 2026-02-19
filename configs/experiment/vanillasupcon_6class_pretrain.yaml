@@ -4,18 +4,24 @@
 # python src/train.py experiment=vanillasupcon_6class_pretrain paths=fm_testing_4090 data=collide2v_miniA6000
 
 defaults:
-  - override /data: collide2v_basic
+  - override /data: collide2v_mini4090 #change wrt the data you want 
   - override /callbacks: supcon
   - override /trainer: gpu
+  - override /logger: mlflow
+  - override /model: vanilla_supcon  # ← Use base model config
+
+
 
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
 tags: ["collide2v", "vanillasupcon", "pretraining", "6class", "metric_learning"]
 
+seed: 42
+
 data:
-  batch_size: 1024  
-  train_val_test_split_per_class: [100000, 10000, 10000]
+  batch_size: 64  
+  train_val_test_split_per_class: [200, 50, 50]  # Total 300 events per class, fits gamma (649 events)
   label: "v2_6class_highlevel"
   num_workers: 0
   to_classify:
@@ -79,28 +85,26 @@ trainer:
   #accumulate_grad_batches: 2  # Effective batch = 512 * 2 = 1024
 
 model:
-  _target_: src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule
-  d_model: 512
-  n_heads: 16
-  num_layers: 6
-  d_ff: 2048
-  dropout: 0.1
+  # Architecture (override some params from base)
+  n_heads: 8
+  
+  # Projection head
   projection_dim: 128
   hidden_projection_dim: 256
-  temperature: 0.07  # Lowered from 0.1 for harder negative mining
-  use_classification_head: true
-  classification_weight: 0.1
+  
+  # Loss
+  temperature: 0.07  # Lowered from base 0.1 for harder negative mining
+  use_classification_head: false
+  
+  # Optimizer (override)
   optimizer:
-    _target_: torch.optim.AdamW
-    _partial_: true
-    lr: 0.0003
-    weight_decay: 1e-5  # Increased for better regularization
+    lr: 0.0003  # Increased from base 0.0001
+    weight_decay: 0.00001  # 1e-5
+  
+  # Scheduler (override)
   scheduler:
-    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-    _partial_: true
-    T_max: ${trainer.max_epochs}
-    eta_min: 1e-6
-  compile: false
+    T_max: ${trainer.max_epochs}  # Match trainer epochs
+    eta_min: 0.000001  # 1e-6
 
 preprocess:
   enabled: true
@@ -109,3 +113,17 @@ logger:
   mlflow:
     experiment_name: "supcon_pretraining"
     run_name: "vanillasupcon_6class_pretrain"
+
+eval_after_training: true  # Enable automatic probe evaluation
+
+eval:
+  linear_probe:
+    max_epochs: 50
+    lr: 0.001
+    weight_decay: 0.0
+  
+  knn_probe:
+    k_values: [1, 3, 5, 10, 20]
+    metric: 'cosine'
+  
+  output_dir: ${paths.output_dir}/probe_evaluation

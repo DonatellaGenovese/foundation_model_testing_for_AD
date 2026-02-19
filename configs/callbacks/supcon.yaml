@@ -14,7 +14,7 @@ model_checkpoint:
   save_top_k: 3
   save_last: true
   verbose: true
-  filename: "epoch_{epoch:03d}_val_con_loss_{val/con_loss:.4f}"
+  filename: "epoch{epoch:03d}_valconloss{val/con_loss:.4f}"
 
 early_stopping:
   monitor: "val/con_loss"

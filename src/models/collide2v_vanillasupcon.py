@@ -14,12 +14,26 @@ Key Components:
 from typing import Any, Dict, Optional, Tuple
 import os
 import json
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from lightning import LightningModule
 from torchmetrics import MeanMetric, MaxMetric
-from torchmetrics.classification.accuracy import Accuracy
+from torchmetrics.classification import (
+    Accuracy,
+    MulticlassF1Score,
+    MulticlassAUROC,
+    MulticlassConfusionMatrix
+)
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    classification_report,
+    roc_auc_score,
+    confusion_matrix
+)
 
 from .components.transformer import TinyTransformer
 
@@ -202,8 +216,289 @@ class SupConLoss(nn.Module):
         
         return loss
 
+class LinearProbe(LightningModule):
+    """
+    Linear classifier on top of FROZEN embeddings.
+    
+    Used to evaluate embedding quality: trains ONLY a linear layer.
+    Encoder weights remain frozen.
+    
+    Usage:
+        1. Train contrastive model
+        2. Freeze encoder
+        3. Train this probe → measures linear separability
+    """
+    
+    def __init__(
+        self,
+        encoder: nn.Module,
+        embedding_dim: int,
+        num_classes: int,
+        class_names: Optional[list] = None,
+        lr: float = 0.001,
+        weight_decay: float = 0.0,
+    ):
+        super().__init__()
+        self.save_hyperparameters(ignore=['encoder'])
+        self.class_names = class_names or [f"class_{i}" for i in range(num_classes)]
+        
+        # Freeze encoder
+        self.encoder = encoder
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+        self.encoder.eval()
+        
+        # Trainable linear classifier
+        self.classifier = nn.Linear(embedding_dim, num_classes)
+        
+        # Loss and metrics
+        self.criterion = nn.CrossEntropyLoss()
+        self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
+        self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
+        self.test_acc = Accuracy(task="multiclass", num_classes=num_classes)
+        
+        # Additional test metrics
+        self.test_f1_per_class = MulticlassF1Score(num_classes=num_classes, average=None)
+        self.test_f1_macro = MulticlassF1Score(num_classes=num_classes, average='macro')
+        self.test_auroc_per_class = MulticlassAUROC(num_classes=num_classes, average=None)
+        self.test_auroc_macro = MulticlassAUROC(num_classes=num_classes, average='macro')
+        
+        self.val_acc_best = MaxMetric()
+        
+        # Store computed metrics for retrieval after test
+        self.cached_test_metrics = None
 
-# ...existing code...
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Get logits from frozen embeddings."""
+        with torch.no_grad():
+            embeddings = self.encoder.get_embeddings(x)
+        logits = self.classifier(embeddings)
+        return logits
+    
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int):
+        x, y = batch
+        logits = self(x)
+        loss = self.criterion(logits, y)
+        
+        preds = torch.argmax(logits, dim=1)
+        self.train_acc(preds, y)
+        
+        self.log("probe/train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("probe/train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
+        return loss
+    
+    def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int):
+        x, y = batch
+        logits = self(x)
+        loss = self.criterion(logits, y)
+        
+        preds = torch.argmax(logits, dim=1)
+        self.val_acc(preds, y)
+        
+        self.log("probe/val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("probe/val_acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
+    
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int):
+        x, y = batch
+        logits = self(x)
+        probs = torch.softmax(logits, dim=1)
+        preds = torch.argmax(logits, dim=1)
+        
+        # Update metrics
+        self.test_acc(preds, y)
+        self.test_f1_per_class(preds, y)
+        self.test_f1_macro(preds, y)
+        self.test_auroc_per_class(probs, y)
+        self.test_auroc_macro(probs, y)
+        
+        self.log("probe/test_acc", self.test_acc, on_step=False, on_epoch=True)
+        self.log("probe/test_f1_macro", self.test_f1_macro, on_step=False, on_epoch=True)
+        self.log("probe/test_auroc_macro", self.test_auroc_macro, on_step=False, on_epoch=True)
+        
+    def on_validation_epoch_end(self):
+        acc = self.val_acc.compute()
+        self.val_acc_best(acc)
+        self.log("probe/val_acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
+    
+    def on_test_epoch_end(self):
+        """Compute and cache per-class metrics before automatic reset."""
+        # Compute all metrics before they get reset
+        accuracy = self.test_acc.compute()
+        f1_macro = self.test_f1_macro.compute()
+        f1_per_class = self.test_f1_per_class.compute()
+        auroc_macro = self.test_auroc_macro.compute()
+        auroc_per_class = self.test_auroc_per_class.compute()
+        
+        # Cache results for later retrieval
+        self.cached_test_metrics = {
+            'accuracy': accuracy.cpu().numpy(),
+            'f1_macro': f1_macro.cpu().numpy(),
+            'f1_per_class': f1_per_class.cpu().numpy(),
+            'auroc_macro': auroc_macro.cpu().numpy(),
+            'auroc_per_class': auroc_per_class.cpu().numpy(),
+        }
+        
+        # Log per-class metrics
+        for i in range(len(f1_per_class)):
+            self.log(f"probe/test_f1_class_{i}", f1_per_class[i])
+            self.log(f"probe/test_auroc_class_{i}", auroc_per_class[i])
+    
+    def configure_optimizers(self):
+        return torch.optim.Adam(
+            self.classifier.parameters(),
+            lr=self.hparams.lr,
+            weight_decay=self.hparams.weight_decay
+        )
+    
+    def get_detailed_metrics(self) -> Dict[str, Any]:
+        """Get detailed per-class and aggregate metrics from cached results."""
+        if self.cached_test_metrics is None:
+            raise RuntimeError("No cached test metrics found. Run trainer.test() first.")
+        return self.cached_test_metrics
+        
+class KNNProbe:
+    """
+    K-Nearest Neighbors classifier on frozen embeddings.
+    
+    Non-parametric evaluation: no training, just fit on train embeddings.
+    Measures local separability of embedding space.
+    
+    Usage:
+        1. Train contrastive model
+        2. Extract embeddings from train set
+        3. Fit KNN
+        4. Evaluate on test set
+    """
+    
+    def __init__(
+        self,
+        encoder: nn.Module,
+        k: int = 5,
+        metric: str = 'cosine',
+        device: str = 'cuda'
+    ):
+        """
+        Args:
+            encoder: Pretrained encoder (will be set to eval mode)
+            k: Number of neighbors
+            metric: Distance metric ('cosine', 'euclidean', 'minkowski')
+            device: Device for embedding extraction
+        """
+        self.encoder = encoder
+        self.encoder.eval()
+        self.device = device
+        self.k = k
+        self.metric = metric
+        self.knn = KNeighborsClassifier(n_neighbors=k, metric=metric, n_jobs=-1)
+        
+        self.train_embeddings = None
+        self.train_labels = None
+
+    @torch.no_grad()
+    def extract_embeddings(self, dataloader) -> Tuple[np.ndarray, np.ndarray]:
+        """Extract embeddings from dataloader."""
+        embeddings_list = []
+        labels_list = []
+        
+        self.encoder.to(self.device)
+        
+        for batch in dataloader:
+            x, y = batch
+            x = x.to(self.device)
+            
+            embeddings = self.encoder.get_embeddings(x)
+            embeddings_list.append(embeddings.cpu().numpy())
+            labels_list.append(y.cpu().numpy())
+        
+        embeddings = np.vstack(embeddings_list)
+        labels = np.concatenate(labels_list)
+        
+        return embeddings, labels
+
+    def fit(self, train_dataloader):
+        """Fit KNN on training embeddings."""
+        print(f"\n{'='*60}")
+        print(f"Extracting training embeddings for KNN (k={self.k}, metric={self.metric})...")
+        print(f"{'='*60}")
+        
+        self.train_embeddings, self.train_labels = self.extract_embeddings(train_dataloader)
+        
+        print(f"Fitting KNN on {len(self.train_labels)} samples...")
+        self.knn.fit(self.train_embeddings, self.train_labels)
+        print(f"✓ KNN fitted successfully\n")
+    
+    def evaluate(self, test_dataloader, class_names: Optional[list] = None) -> Dict[str, Any]:
+        """Evaluate KNN on test set with detailed per-class metrics."""
+        print(f"{'='*60}")
+        print("Extracting test embeddings...")
+        print(f"{'='*60}")
+        
+        test_embeddings, test_labels = self.extract_embeddings(test_dataloader)
+        
+        print(f"Predicting with KNN (k={self.k})...")
+        predictions = self.knn.predict(test_embeddings)
+        predict_proba = self.knn.predict_proba(test_embeddings)
+        
+        # Compute aggregate metrics
+        acc = accuracy_score(test_labels, predictions)
+        f1_macro = f1_score(test_labels, predictions, average='macro')
+        f1_weighted = f1_score(test_labels, predictions, average='weighted')
+        
+        # Compute per-class metrics
+        f1_per_class = f1_score(test_labels, predictions, average=None)
+        
+        # Compute AUROC (one-vs-rest)
+        try:
+            auroc_macro = roc_auc_score(test_labels, predict_proba, average='macro', multi_class='ovr')
+            auroc_per_class = roc_auc_score(test_labels, predict_proba, average=None, multi_class='ovr')
+        except Exception as e:
+            print(f"Warning: Could not compute AUROC: {e}")
+            auroc_macro = 0.0
+            auroc_per_class = np.zeros(len(np.unique(test_labels)))
+        
+        # Confusion matrix
+        conf_matrix = confusion_matrix(test_labels, predictions)
+        
+        # Print results
+        print(f"\n{'='*60}")
+        print(f"KNN Probe Results (k={self.k}, metric={self.metric})")
+        print(f"{'='*60}")
+        print(f"Accuracy: {acc:.4f}")
+        print(f"F1 Score (macro): {f1_macro:.4f}")
+        print(f"F1 Score (weighted): {f1_weighted:.4f}")
+        print(f"AUROC (macro): {auroc_macro:.4f}")
+        
+        # Print per-class metrics
+        print(f"\nPer-Class Metrics:")
+        print(f"{'-'*60}")
+        if class_names:
+            for i, name in enumerate(class_names):
+                print(f"  {name:20s}: F1={f1_per_class[i]:.4f}, AUROC={auroc_per_class[i]:.4f}")
+        else:
+            for i in range(len(f1_per_class)):
+                print(f"  Class {i:2d}: F1={f1_per_class[i]:.4f}, AUROC={auroc_per_class[i]:.4f}")
+        
+        print(f"\nClassification Report:")
+        print(classification_report(
+            test_labels,
+            predictions,
+            target_names=class_names,
+            digits=4
+        ))
+        
+        return {
+            'knn_accuracy': acc,
+            'knn_f1_macro': f1_macro,
+            'knn_f1_weighted': f1_weighted,
+            'knn_f1_per_class': f1_per_class,
+            'knn_auroc_macro': auroc_macro,
+            'knn_auroc_per_class': auroc_per_class,
+            'predictions': predictions,
+            'labels': test_labels,
+            'embeddings': test_embeddings,
+            'confusion_matrix': conf_matrix,
+        }
+    
 
 class COLLIDE2VVanillaSupConLitModule(LightningModule):
     def __init__(

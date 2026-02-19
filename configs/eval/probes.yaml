@@ -1,0 +1,19 @@
+# @package _global_.eval
+# Probe evaluation configuration for Linear and KNN probes
+
+# Linear probe settings
+linear_probe:
+  max_epochs: 50
+  lr: 0.001
+  weight_decay: 0.0
+  
+# KNN probe settings
+knn_probe:
+  k_values: [1, 3, 5, 10, 20, 50]  # Test multiple k values
+  metric: 'cosine'  # Distance metric: 'cosine', 'euclidean', 'minkowski'
+  
+# Output settings
+save_embeddings: true
+save_predictions: true
+save_visualizations: false  # Set to true for t-SNE/UMAP plots
+output_dir: ${paths.output_dir}/probe_evaluation

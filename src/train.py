@@ -145,6 +145,40 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # merge train and test metrics
     metric_dict = {**train_metrics, **test_metrics}
 
+    # ============================================================
+    # PROBE EVALUATION (if enabled)
+    # ============================================================
+    if cfg.get("eval_after_training", False):
+        log.info("\n" + "="*80)
+        log.info("STARTING AUTOMATIC PROBE EVALUATION")
+        log.info("="*80)
+        
+        try:
+            from src.eval_probes import evaluate_with_probes
+            
+            # Use the trained model (current state)
+            probe_results = evaluate_with_probes(cfg, model, datamodule)
+            
+            # Merge probe results into metric dict
+            metric_dict.update(probe_results)
+            
+            # Log probe results to loggers if available
+            if logger:
+                for lg in logger:
+                    if hasattr(lg, "log_metrics"):
+                        try:
+                            lg.log_metrics(probe_results)
+                        except Exception as e:
+                            log.warning(f"Failed to log probe metrics to {lg}: {e}")
+            
+            log.info("Probe evaluation completed successfully!")
+            
+        except Exception as e:
+            log.error(f"Probe evaluation failed: {e}")
+            log.warning("Continuing without probe evaluation...")
+    else:
+        log.info("\nSkipping probe evaluation (eval_after_training=False)")
+
     return metric_dict, object_dict
 
 

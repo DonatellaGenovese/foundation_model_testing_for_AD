@@ -188,105 +188,124 @@ class ProjectionHead(nn.Module):
         return self.net(x)
 
 
-class SimCLRLoss(nn.Module):
+class SupConLoss(nn.Module):
     """
-    SimCLR-based Supervised Contrastive Loss.
+    Supervised Contrastive Learning loss (SupCon).
     
-    This is a variant of the standard SupCon loss that computes contrastive loss
-    over augmented views. For each sample:
-    - Positive set: All samples with same class label (including augmented views)
-    - Negative set: All samples with different class labels
+    Paper: Supervised Contrastive Learning (Khosla et al., NeurIPS 2020)
+    https://arxiv.org/abs/2004.11362
     
-    Key differences from standard SupCon:
-    1. Works with augmented views (typically 2 views per sample)
-    2. Treats all same-class samples as positives (supervised)
-    3. Uses a slightly different normalization in the loss computation
+    For each sample i:
+    - Positive set P(i): All samples in batch with same class label
+    - Negative set: All other samples in batch (different classes)
+    - Loss: Pull positives close, push negatives away
     
     Formula:
-        For each sample i with label y_i:
-        - Positives P(i): All samples j where y_j == y_i (including augmented views)
-        - Negatives N(i): All samples j where y_j != y_i
-        - Loss: -temperature * mean_over_positives[ log(exp(sim(i,p)) / sum_all_k(exp(sim(i,k)) * mask_k)) ]
+        L = -1/|P(i)| * Σ_{p∈P(i)} log[ exp(sim(i,p)/τ) / Σ_{k≠i} exp(sim(i,k)/τ) ]
     
     Where:
         - sim(i,j) = cosine similarity between L2-normalized embeddings
-        - mask excludes positive samples from the denominator
-        - temperature: scaling factor (lower = harder discrimination)
-    
-    Reference: Adapted from SimCLR (Chen et al., ICML 2020) with supervised variant
+        - τ = temperature (lower = harder negative mining)
+        - |P(i)| = number of positive pairs for sample i
     """
     
-    def __init__(self, temperature: float = 0.07):
+    def __init__(self, temperature: float = 0.1, base_temperature: float = 0.07):
         """
         Args:
-            temperature: Scaling factor for similarities (typical: 0.05-0.1)
+            temperature: Scaling factor for similarities (typical: 0.07-0.1)
                         Lower = harder discrimination, higher = softer
+            base_temperature: Base temperature for loss scaling (from paper)
+                             Typically set equal to temperature
         """
         super().__init__()
         self.temperature = temperature
+        self.base_temperature = base_temperature
     
-    def forward(self, features: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    def forward(self, features: torch.Tensor, labels: torch.Tensor, strict_multi_class: bool = True, debug: bool = False) -> torch.Tensor:
         """
-        Compute SimCLR-based supervised contrastive loss.
+        Compute supervised contrastive loss.
         
         Args:
             features: L2-normalized projections [batch_size, embedding_dim]
-                     Can include multiple views: [batch_size * n_views, embedding_dim]
-            labels: Class labels [batch_size] or [batch_size * n_views]
-                   If using n_views, labels should be repeated: [y1, y1, y2, y2, ...]
+            labels: Class labels [batch_size]
+            strict_multi_class: If True, raise error on single-class batch; if False, return 0 loss
+            debug: If True, print debug information
         
         Returns:
             Scalar loss value
-        
-        Raises:
-            ValueError: If batch size < 2 or labels don't match features
         """
         device = features.device
         batch_size = features.shape[0]
-        
+
         if batch_size < 2:
-            raise ValueError("SimCLRLoss requires batch_size >= 2.")
+            raise ValueError("SupConLoss requires batch_size >= 2.")
         
-        # Reshape labels to [batch_size, 1] for broadcasting
+        # Ensure labels is proper shape [B, 1]
         labels = labels.contiguous().view(-1, 1)
         
-        if labels.shape[0] != batch_size:
-            raise ValueError(f'Number of labels ({labels.shape[0]}) does not match number of features ({batch_size})')
+        # DEBUG: Check for single-class batches
+        unique_classes = torch.unique(labels)
+        num_classes_in_batch = len(unique_classes)
+        
+        if debug:
+            print(f"\n[SupConLoss DEBUG]")
+            print(f"  Batch size: {batch_size}")
+            print(f"  Num unique classes: {num_classes_in_batch}")
+            print(f"  Classes: {unique_classes.cpu().numpy()}")
+            print(f"  Features shape: {features.shape}")
+            print(f"  Features norm (should be ~1.0): min={features.norm(dim=1).min():.4f}, max={features.norm(dim=1).max():.4f}")
         
         # Create positive pairs mask: mask[i,j] = 1 if labels[i] == labels[j]
-        # Shape: [batch_size, batch_size]
-        mask = torch.eq(labels, labels.T).float().to(device)
-        
-        # Create negative pairs mask: logits_mask[i,j] = 0 if labels[i] == labels[j]
-        # This is the inverse of the positive mask
-        # Shape: [batch_size, batch_size]
-        logits_mask = torch.logical_not(mask).float()
+        # This is a [B, B] matrix where entry (i,j) is 1 if same class, 0 otherwise
+        mask = torch.eq(labels, labels.T).float().to(device)  # [B, B]
+
+        # SupCon needs both positives and negatives in-batch to learn class separation.
+        # If a batch contains a single class only, contrastive learning degenerates.
+        if num_classes_in_batch < 2:
+            if strict_multi_class:
+                raise ValueError(
+                    "SupConLoss received a single-class batch. "
+                    "Need at least 2 classes per batch for meaningful contrastive learning."
+                )
+            else:
+                if debug:
+                    print(f"  [WARNING] Single-class batch detected! Returning zero loss.")
+                # Return zero loss but keep gradient flow
+                return torch.tensor(0.0, device=device, requires_grad=True)
         
         # Compute similarity matrix: dot product between all pairs
         # Since features are L2-normalized, this gives cosine similarity
-        # Shape: [batch_size, batch_size]
-        logits = torch.div(
-            torch.matmul(features, features.T),
-            self.temperature
-        )
+        similarity_matrix = torch.matmul(features, features.T)  # [B, B]
         
         # For numerical stability: subtract max from logits
         # This prevents overflow in exp() without changing gradients
-        logits_max, _ = torch.max(logits, dim=1, keepdim=True)
-        logits = logits - logits_max.detach()
+        logits_max, _ = torch.max(similarity_matrix, dim=1, keepdim=True)
+        logits = similarity_matrix - logits_max.detach()
         
-        # Compute exp(logits)
-        # For negatives: multiply by logits_mask
-        # For positives: multiply by mask
-        exp_logits_neg = torch.exp(logits) * logits_mask
-        exp_logits_pos = torch.exp(logits) * mask
+        # Compute exp(similarity / temperature)
+        exp_logits = torch.exp(logits / self.temperature)
         
-        # Denominator: sum of all exp(logits) (both positives and negatives)
-        # Add small epsilon for numerical stability
-        denominator = exp_logits_neg.sum(1, keepdim=True) + exp_logits_pos.sum(1, keepdim=True) + 1e-9
+        # Create mask to remove self-similarity (diagonal elements)
+        # We don't want to compare a sample with itself
+        logits_mask = torch.ones_like(mask).fill_diagonal_(0)
         
-        # Compute log probability: log(exp(sim(i,j)) / denominator)
-        log_prob = logits - torch.log(denominator)
+        # Apply mask: only keep non-diagonal elements
+        mask = mask * logits_mask  # Positive pairs (excluding self)
+        
+        if debug:
+            print(f"  Positive pairs per sample: min={mask.sum(1).min().item():.0f}, max={mask.sum(1).max().item():.0f}, mean={mask.sum(1).float().mean().item():.2f}")
+            print(f"  Similarity (before temp): min={similarity_matrix.min().item():.4f}, max={similarity_matrix.max().item():.4f}")
+            print(f"  Similarity / T: min={logits.min().item():.4f}, max={logits.max().item():.4f}")
+        
+        # Compute log probability for each positive pair
+        # Numerator: similarity to positive
+        # Denominator: sum of similarities to all samples (except self)
+        log_prob = logits / self.temperature - torch.log(
+            (exp_logits * logits_mask).sum(1, keepdim=True) + 1e-9  # Add epsilon for stability
+        )
+        
+        if debug:
+            print(f"  Log prob: min={log_prob.min().item():.4f}, max={log_prob.max().item():.4f}")
         
         # Compute mean log-likelihood over positive pairs
         # For each sample, sum over all its positive pairs and normalize by count
@@ -299,12 +318,19 @@ class SimCLRLoss(nn.Module):
         # Sum log probabilities over positives and normalize
         mean_log_prob_pos = (mask * log_prob).sum(1) / mask_sum
         
-        # Loss: -temperature * mean(log_prob_pos)
-        # The temperature factor is a scaling constant
-        loss = -self.temperature * mean_log_prob_pos
+        if debug:
+            print(f"  Mean log prob pos: min={mean_log_prob_pos.min().item():.4f}, max={mean_log_prob_pos.max().item():.4f}")
         
-        # Average over batch
-        loss = loss.view(1, batch_size).float().mean()
+        # Loss is negative mean log-likelihood (we want to maximize likelihood)
+        # Apply temperature scaling as in the original paper
+        # NOTE: This returns a SCALAR loss (mean over batch)
+        loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
+        loss = loss.mean()
+        
+        if debug:
+            print(f"  Loss (before mean): min={loss.min().item():.4f}, max={loss.max().item():.4f}" if loss.dim() > 0 else f"  Loss (scalar): {loss.item():.4f}")
+            print(f"  Temperature scaling: {self.temperature / self.base_temperature:.4f}")
+            print(f"  Final loss (scalar): {loss.item():.4f}")
         
         return loss
 
@@ -359,11 +385,13 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         projection_dim: int = 128,
         hidden_projection_dim: int = 256,
         temperature: float = 0.07,
+        base_temperature: float = 0.07,
         mask_probability: float = 0.2,
         mask_full_particle: bool = False,
         num_augmentations: int = 2,
         use_classification_head: bool = True,
         classification_weight: float = 0.1,
+        allow_single_class_batches: bool = True,
         optimizer: Any = None,
         scheduler: Optional[Any] = None,
         compile: bool = False,
@@ -384,7 +412,7 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         self._setup_calls = 0
         
         # Loss functions
-        self.contrastive_criterion = SimCLRLoss(temperature=temperature)
+        self.contrastive_criterion = SupConLoss(temperature=temperature, base_temperature=base_temperature)
         self.classification_criterion = nn.CrossEntropyLoss() if use_classification_head else None
         
         # Training metrics
@@ -416,6 +444,10 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         # Extract embeddings from encoder
         embeddings = self.encoder.get_embeddings(x)
         
+        # Safety check: ensure embeddings require gradients during training
+        if self.training and not embeddings.requires_grad:
+            raise RuntimeError("Embeddings do not require grad. Check encoder/get_embeddings path.")
+        
         # Project to contrastive space
         projections = self.projection_head(embeddings)
         
@@ -431,7 +463,8 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
     
     def model_step(
         self,
-        batch: Tuple[torch.Tensor, torch.Tensor]
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int = 0
     ) -> Dict[str, torch.Tensor]:
         """
         Perform a single forward pass with augmentation and loss computation.
@@ -446,15 +479,18 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
             batch: Tuple of (features, labels)
                   features: [batch_size, feature_dim]
                   labels: [batch_size]
+            batch_idx: Index of current batch (for debug logging)
         
         Returns:
             Dictionary containing:
-                - contrastive_loss: SimCLR contrastive loss
+                - contrastive_loss: SupCon contrastive loss
                 - embeddings: Encoder embeddings (first view only)
                 - projections: Normalized projections (first view only)
                 - classification_loss: Optional classification loss
                 - logits: Optional classification logits (first view only)
                 - preds: Optional predictions (first view only)
+                - num_classes_in_batch: Number of unique classes in batch
+                - is_single_class: 1.0 if single-class batch, 0.0 otherwise
         """
         x, labels = batch
         batch_size = x.shape[0]
@@ -479,8 +515,25 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         # Forward pass through encoder and projection head
         embeddings, projections, logits = self.forward(x_augmented)
         
+        # Check for single-class batches
+        unique_classes = torch.unique(labels).numel()
+        is_single_class_batch = unique_classes < 2
+        
+        # DEBUG: Print on first batch
+        debug_loss = (batch_idx == 0 and self.training)
+        
         # Compute contrastive loss over all augmented views
-        contrastive_loss = self.contrastive_criterion(projections, labels_repeated)
+        if is_single_class_batch and self.hparams.allow_single_class_batches:
+            contrastive_loss = projections.new_zeros((), requires_grad=True)
+            if debug_loss:
+                print(f"\n[AugSupCon] Single-class batch detected. Returning zero loss.")
+        else:
+            contrastive_loss = self.contrastive_criterion(
+                projections,
+                labels_repeated,
+                strict_multi_class=self.training,
+                debug=debug_loss,
+            )
         
         # Prepare return dictionary
         result = {
@@ -488,6 +541,11 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
             # Return only first view's embeddings/projections for logging
             "embeddings": embeddings[:batch_size],
             "projections": projections[:batch_size],
+            "num_classes_in_batch": torch.tensor(unique_classes, device=labels.device),
+            "is_single_class": torch.tensor(
+                1.0 if is_single_class_batch else 0.0,
+                device=labels.device,
+            ),
         }
         
         # Optional classification loss (only on first view)
@@ -516,7 +574,7 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
             Total loss (contrastive + optional classification)
         """
         x, labels = batch
-        outputs = self.model_step(batch)
+        outputs = self.model_step(batch, batch_idx)
         
         # Total loss = contrastive + (optional) weighted classification
         loss = outputs["contrastive_loss"]
@@ -537,11 +595,15 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         self.log("train/con_loss", self.train_contrastive_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/loss", loss, on_step=False, on_epoch=True)
         
-        # Log embedding statistics for monitoring
+        # Log embedding statistics and batch composition for monitoring
         if batch_idx == 0:
             self.log("debug/emb_mean", outputs["embeddings"].mean(), on_step=False, on_epoch=True)
             self.log("debug/emb_std", outputs["embeddings"].std(), on_step=False, on_epoch=True)
             self.log("debug/proj_std", outputs["projections"].std(), on_step=False, on_epoch=True)
+        
+        # Log batch composition
+        self.log("debug/num_classes_in_batch", outputs["num_classes_in_batch"], on_step=False, on_epoch=True)
+        self.log("debug/is_single_class", outputs["is_single_class"], on_step=False, on_epoch=True)
         
         return loss
     

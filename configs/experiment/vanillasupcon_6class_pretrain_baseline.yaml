@@ -1,27 +1,27 @@
 # @package _global_
 
-# to execute this experiment run:
-# python src/train.py experiment=vanillasupcon_6class_pretrain paths=fm_testing_4090 data=collide2v_miniA6000
+# Baseline: evaluate probes on an untrained (randomly initialized) SupCon encoder.
+# This lets you compare the quality of learned embeddings vs. no contrastive training.
+#
+# Run with e.g.:
+#   python src/train.py experiment=vanillasupcon_6class_pretrain_baseline paths=fm_testing_4090 data=collide2v_miniA6000
 
 defaults:
-  - override /data: collide2v_mini4090 #change wrt the data you want 
+  - override /data: collide2v_mini4090
   - override /callbacks: supcon
   - override /trainer: gpu
   - override /logger: mlflow
-  - override /model: vanilla_supcon  # ← Use base model config
+  - override /model: vanilla_supcon
 
-
-
-# all parameters below will be merged with parameters from default configurations set above
-# this allows you to overwrite only specified parameters
-
-tags: ["collide2v", "vanillasupcon", "pretraining", "6class", "metric_learning"]
+# Tags and seed
+tags: ["collide2v", "vanillasupcon", "baseline", "6class", "metric_learning"]
 
 seed: 42
 
+# Use exactly the same data setup as vanillasupcon_6class_pretrain
 data:
-  batch_size: 512  
-  train_val_test_split_per_class: [80000, 10000, 10000] 
+  batch_size: 512
+  train_val_test_split_per_class: [80000, 10000, 10000]
   label: "v2_6class_highlevel"
   num_workers: 7
   to_classify:
@@ -74,38 +74,37 @@ data:
       cols:
         - FullReco_PUPPIMET_MET
         - FullReco_PUPPIMET_Phi
-      topk: null   # scalar values
+      topk: null
       count: false
 
-trainer:
-  min_epochs: 5
-  max_epochs: 50
-  gradient_clip_algorithm: norm
-  gradient_clip_val: 1.0
-  #accumulate_grad_batches: 2  # Effective batch = 512 * 2 = 1024
-
+# Same model hyperparameters as training experiment,
+# but we won't run contrastive training (train=False).
 model:
-  # Architecture (override some params from base)
   n_heads: 8
-  
-  # Projection head
   projection_dim: 128
   hidden_projection_dim: 256
-  
-  # Loss
-  temperature: 0.07  # Lowered from base 0.1 for harder negative mining
-  base_temperature: 1.0  # Base temperature for loss scaling
+  temperature: 0.07
+  base_temperature: 1.0
   use_classification_head: false
-  
-  # Optimizer (override)
+
   optimizer:
-    lr: 0.0003  # Increased from base 0.0001
-    weight_decay: 0.00001  # 1e-5
-  
-  # Scheduler (override)
+    lr: 0.0003
+    weight_decay: 0.00001
+
   scheduler:
-    T_max: ${trainer.max_epochs}  # Match trainer epochs
-    eta_min: 0.000001  # 1e-6
+    T_max: ${trainer.max_epochs}
+    eta_min: 0.000001
+
+# Trainer is still instantiated but training/testing will be skipped.
+trainer:
+  min_epochs: 2
+  max_epochs: 10
+  gradient_clip_algorithm: norm
+  gradient_clip_val: 1.0
+
+# Don't train or test; just run probe evaluation on the untrained encoder.
+train: false
+test: false
 
 preprocess:
   enabled: true
@@ -113,19 +112,19 @@ preprocess:
 logger:
   mlflow:
     experiment_name: "supcon_pretraining"
-    run_name: "vanillasupcon_6class_pretrain"
+    run_name: "vanillasupcon_6class_pretrain_baseline"
 
-eval_after_training: true  # Enable automatic probe evaluation
+# Run automatic probe evaluation using the randomly initialized encoder
+eval_after_training: true
 
 eval:
   linear_probe:
     max_epochs: 15
     lr: 0.001
     weight_decay: 0.0
-  
+
   knn_probe:
-    # Disable KNN during optimization to save time
-    k_values: []
-    metric: 'cosine'
-  
-  output_dir: ${paths.output_dir}/probe_evaluation
+    k_values: [1, 3, 5, 10, 20]
+    metric: "cosine"
+
+  output_dir: ${paths.output_dir}/probe_evaluation_baseline

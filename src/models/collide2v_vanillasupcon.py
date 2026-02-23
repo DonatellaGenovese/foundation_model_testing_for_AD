@@ -96,14 +96,17 @@ class SupConLoss(nn.Module):
         - |P(i)| = number of positive pairs for sample i
     """
     
-    def __init__(self, temperature: float = 0.1):
+    def __init__(self, temperature: float = 0.1, base_temperature: float = 0.07):
         """
         Args:
             temperature: Scaling factor for similarities (typical: 0.07-0.1)
                         Lower = harder discrimination, higher = softer
+            base_temperature: Base temperature for loss scaling (from paper)
+                             Typically set equal to temperature
         """
         super().__init__()
         self.temperature = temperature
+        self.base_temperature = base_temperature
     
     def forward(self, features: torch.Tensor, labels: torch.Tensor, strict_multi_class: bool = True, debug: bool = False) -> torch.Tensor:
         """
@@ -206,12 +209,13 @@ class SupConLoss(nn.Module):
             print(f"  Mean log prob pos: min={mean_log_prob_pos.min().item():.4f}, max={mean_log_prob_pos.max().item():.4f}")
         
         # Loss is negative mean log-likelihood (we want to maximize likelihood)
+        # Apply temperature scaling as in the original paper
         # NOTE: This returns a SCALAR loss (mean over batch)
-        loss_per_sample = -mean_log_prob_pos
-        loss = loss_per_sample.mean()
+        loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
+        loss = loss.mean()
         
         if debug:
-            print(f"  Loss per sample: min={loss_per_sample.min().item():.4f}, max={loss_per_sample.max().item():.4f}, mean={loss_per_sample.mean().item():.4f}")
+            print(f"  Temperature scaling: {self.temperature / self.base_temperature:.4f}")
             print(f"  Final loss (scalar): {loss.item():.4f}")
         
         return loss
@@ -511,6 +515,7 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         projection_dim: int = 128,
         hidden_projection_dim: int = 256,
         temperature: float = 0.1,
+        base_temperature: float = 0.07,
         use_classification_head: bool = True,
         classification_weight: float = 0.1,
         allow_single_class_batches: bool = True,
@@ -532,7 +537,7 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         self._setup_calls_to_log: Optional[float] = None
 
         # Losses
-        self.contrastive_criterion = SupConLoss(temperature=temperature)
+        self.contrastive_criterion = SupConLoss(temperature=temperature, base_temperature=base_temperature)
         self.classification_criterion = nn.CrossEntropyLoss() if use_classification_head else None
 
         # Metrics
@@ -679,9 +684,14 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         self.val_contrastive_loss(outputs["contrastive_loss"])
         self.log("val/con_loss", self.val_contrastive_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/loss", loss, on_step=False, on_epoch=True)
-        
-        # Log batch statistics
-        self.log("debug/val_num_classes_in_batch", outputs["num_classes_in_batch"], on_step=False, on_epoch=True)
+
+        # Log batch statistics (mirror train_step behavior)
+        self.log(
+            "debug/val_num_classes_in_batch",
+            outputs["num_classes_in_batch"].float() if hasattr(outputs["num_classes_in_batch"], "float") else float(outputs["num_classes_in_batch"]),
+            on_step=False,
+            on_epoch=True,
+        )
         self.log("debug/val_single_class_batch", outputs["is_single_class"], on_step=False, on_epoch=True)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
@@ -719,19 +729,22 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
             self.val_acc_best(acc)
             self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
 
-    def setup(self, stage: str) -> None:
-        self._setup_calls += 1
-        self._setup_calls_to_log = float(self._setup_calls)
+    def _build_from_datamodule(self, dm: Any, stage: str = "fit") -> None:
+        """Initialize encoder and heads from a COLLIDE2V datamodule.
 
-        # Prevent accidental re-initialization
+        Normally called via ``setup()`` when training with a Trainer, but it
+        can also be used manually (e.g. for baseline probe evaluation without
+        running a training loop).
+        """
+
         if self._built:
             return
 
-        if not (self.trainer and getattr(self.trainer, "datamodule", None)):
-            raise RuntimeError("Datamodule not available in setup().")
+        paths = getattr(dm, "paths", None)
+        if paths is None or "eos_preproc_dir" not in paths:
+            raise RuntimeError("datamodule.paths['eos_preproc_dir'] is required to build the encoder.")
 
-        dm = self.trainer.datamodule
-        eos_preproc_dir = getattr(dm, "paths", None)["eos_preproc_dir"]
+        eos_preproc_dir = paths["eos_preproc_dir"]
         feature_map_path = os.path.join(eos_preproc_dir, "feature_map.json")
         with open(feature_map_path, "r") as f:
             feature_map = json.load(f)
@@ -765,6 +778,20 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
             self.encoder = torch.compile(self.encoder)
 
         self._built = True
+
+    def setup(self, stage: str) -> None:
+        self._setup_calls += 1
+        self._setup_calls_to_log = float(self._setup_calls)
+
+        # Prevent accidental re-initialization
+        if self._built:
+            return
+
+        if not (self.trainer and getattr(self.trainer, "datamodule", None)):
+            raise RuntimeError("Datamodule not available in setup().")
+
+        dm = self.trainer.datamodule
+        self._build_from_datamodule(dm, stage=stage)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         params = [p for p in self.parameters() if p.requires_grad]

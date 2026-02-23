@@ -18,7 +18,7 @@ data:
   batch_size: 1024  
   train_val_test_split_per_class: [100000, 10000, 10000]
   label: "v2_6class_highlevel"
-  num_workers: 0
+  num_workers: 7
   to_classify:
     - "QCD_inclusive"
     - "DY_to_ll"
@@ -170,3 +170,21 @@ logger:
   mlflow:
     experiment_name: "augmented_supcon"
     run_name: "aug_supcon_6class"
+
+# ============================================================
+# PROBE EVALUATION (after training)
+# ============================================================
+eval_after_training: true  # Enable automatic probe evaluation
+
+eval:
+  linear_probe:
+    max_epochs: 15
+    lr: 0.001
+    weight_decay: 0.0
+  
+  knn_probe:
+    # Disable KNN during optimization to save time
+    k_values: []
+    metric: 'cosine'
+  
+  output_dir: ${paths.output_dir}/probe_evaluation

@@ -17,6 +17,7 @@ classification_weight: 0.1
 
 # SupCon Loss
 temperature: 0.1
+base_temperature: 1.0 # Base temperature for loss scaling (from paper)
 allow_single_class_batches: true  # Allow single-class batches (return 0 loss)
 
 # Optimizer

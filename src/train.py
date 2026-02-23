@@ -122,6 +122,8 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     train_metrics = trainer.callback_metrics
 
+    # Optional testing phase
+    test_metrics: Dict[str, Any] = {}
     if cfg.get("test"):
         log.info("Starting testing!")
 
@@ -137,12 +139,12 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
                 log.warning("No best checkpoint found! Using current model weights.")
                 ckpt_path = None
 
-    trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
-    log.info(f"Final ckpt used: {ckpt_path}")
+        trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+        log.info(f"Final ckpt used: {ckpt_path}")
 
-    test_metrics = trainer.callback_metrics
+        test_metrics = trainer.callback_metrics
 
-    # merge train and test metrics
+    # merge train and (optional) test metrics
     metric_dict = {**train_metrics, **test_metrics}
 
     # ============================================================

@@ -11,7 +11,7 @@ Usage:
     python src/eval_probes.py experiment=vanillasupcon_6class_pretrain ckpt_path=/path/to/checkpoint.ckpt
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union
 from pathlib import Path
 import json
 
@@ -30,6 +30,7 @@ from src.models.collide2v_vanillasupcon import (
     LinearProbe,
     KNNProbe,
 )
+from src.models.collide2v_augmented_supcon import COLLIDE2VAugmentedSupConLitModule
 from src.utils import RankedLogger
 
 log = RankedLogger(__name__, rank_zero_only=True)
@@ -37,7 +38,7 @@ log = RankedLogger(__name__, rank_zero_only=True)
 
 def evaluate_with_probes(
     cfg: DictConfig,
-    model: COLLIDE2VVanillaSupConLitModule,
+    model: Union[COLLIDE2VVanillaSupConLitModule, COLLIDE2VAugmentedSupConLitModule],
     datamodule: LightningDataModule,
 ) -> Dict[str, float]:
     """
@@ -58,17 +59,38 @@ def evaluate_with_probes(
     
     # Set model to eval mode
     model.eval()
-    encoder = model.encoder
-    
-    if encoder is None:
-        raise RuntimeError(
-            "Encoder not initialized. The model needs to be set up properly. "
-            "Make sure the checkpoint was saved after training."
-        )
     
     # Ensure datamodule is set up
     if not hasattr(datamodule, 'train_dataloader') or datamodule.train_dataloader is None:
         datamodule.setup('fit')
+
+    # Ensure encoder is built even if no training loop was run (baseline case)
+    encoder = getattr(model, "encoder", None)
+    if encoder is None:
+        # Try vanilla supcon method (_build_from_datamodule)
+        build_fn = getattr(model, "_build_from_datamodule", None)
+        
+        if build_fn is not None:
+            log.info("Encoder not initialized; building encoder from datamodule (vanilla method).")
+            build_fn(datamodule, stage="fit")
+        else:
+            # Try augmented supcon method (setup with trainer)
+            setup_fn = getattr(model, "setup", None)
+            if setup_fn is not None:
+                log.info("Encoder not initialized; setting up model (augmented method).")
+                # Create a minimal trainer for setup
+                model.trainer = type('obj', (object,), {'datamodule': datamodule})()
+                setup_fn(stage="fit")
+            else:
+                raise RuntimeError(
+                    "Encoder not initialized and model does not provide _build_from_datamodule or setup. "
+                    "Make sure the checkpoint was saved after training."
+                )
+        
+        encoder = model.encoder
+
+        if encoder is None:
+            raise RuntimeError("Failed to build encoder from datamodule for probe evaluation.")
     
     # Get eval config (with defaults if not present)
     eval_cfg = cfg.get("eval", None)
@@ -319,7 +341,7 @@ def main(cfg: DictConfig) -> None:
     
     # Load pretrained model
     try:
-        model = COLLIDE2VVanillaSupConLitModule.load_from_checkpoint(str(ckpt_path))
+        model = COLLIDE2VVanillaSupConLitModule.load_from_checkpoint(str(ckpt_path), weights_only=False)
         model.eval()
     except Exception as e:
         log.error(f"Failed to load checkpoint: {e}")

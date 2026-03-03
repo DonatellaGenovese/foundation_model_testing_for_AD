@@ -12,8 +12,10 @@ Key Components:
 """
 
 from typing import Any, Dict, Optional, Tuple
+from pathlib import Path
 import os
 import json
+import inspect
 import numpy as np
 import torch
 import torch.nn as nn
@@ -24,7 +26,8 @@ from torchmetrics.classification import (
     Accuracy,
     MulticlassF1Score,
     MulticlassAUROC,
-    MulticlassConfusionMatrix
+    MulticlassConfusionMatrix,
+    MulticlassROC
 )
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import (
@@ -266,6 +269,7 @@ class LinearProbe(LightningModule):
         self.test_f1_macro = MulticlassF1Score(num_classes=num_classes, average='macro')
         self.test_auroc_per_class = MulticlassAUROC(num_classes=num_classes, average=None)
         self.test_auroc_macro = MulticlassAUROC(num_classes=num_classes, average='macro')
+        self.test_roc = MulticlassROC(num_classes=num_classes, average=None)
         
         self.val_acc_best = MaxMetric()
         
@@ -314,6 +318,7 @@ class LinearProbe(LightningModule):
         self.test_f1_macro(preds, y)
         self.test_auroc_per_class(probs, y)
         self.test_auroc_macro(probs, y)
+        self.test_roc.update(probs, y)
         
         self.log("probe/test_acc", self.test_acc, on_step=False, on_epoch=True)
         self.log("probe/test_f1_macro", self.test_f1_macro, on_step=False, on_epoch=True)
@@ -332,6 +337,7 @@ class LinearProbe(LightningModule):
         f1_per_class = self.test_f1_per_class.compute()
         auroc_macro = self.test_auroc_macro.compute()
         auroc_per_class = self.test_auroc_per_class.compute()
+        fprs, tprs, thresholds = self.test_roc.compute()
         
         # Cache results for later retrieval
         self.cached_test_metrics = {
@@ -340,12 +346,16 @@ class LinearProbe(LightningModule):
             'f1_per_class': f1_per_class.cpu().numpy(),
             'auroc_macro': auroc_macro.cpu().numpy(),
             'auroc_per_class': auroc_per_class.cpu().numpy(),
+            'fprs': [fpr.cpu().numpy() for fpr in fprs],
+            'tprs': [tpr.cpu().numpy() for tpr in tprs],
+            'thresholds': [th.cpu().numpy() for th in thresholds],
         }
         
-        # Log per-class metrics
+        # Log per-class metrics with actual class names
         for i in range(len(f1_per_class)):
-            self.log(f"probe/test_f1_class_{i}", f1_per_class[i])
-            self.log(f"probe/test_auroc_class_{i}", auroc_per_class[i])
+            class_name = self.class_names[i]
+            self.log(f"probe/test_f1_{class_name}", f1_per_class[i])
+            self.log(f"probe/test_auroc_{class_name}", auroc_per_class[i])
     
     def configure_optimizers(self):
         return torch.optim.Adam(
@@ -359,6 +369,64 @@ class LinearProbe(LightningModule):
         if self.cached_test_metrics is None:
             raise RuntimeError("No cached test metrics found. Run trainer.test() first.")
         return self.cached_test_metrics
+    
+    def plot_roc_curves(self, output_dir: Path) -> None:
+        """Plot and save ROC curves for each class and combined plot.
+        
+        Args:
+            output_dir: Directory to save ROC curve plots
+        """
+        import matplotlib.pyplot as plt
+        
+        if self.cached_test_metrics is None:
+            raise RuntimeError("No cached test metrics found. Run trainer.test() first.")
+        
+        fprs = self.cached_test_metrics['fprs']
+        tprs = self.cached_test_metrics['tprs']
+        
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        num_classes = len(fprs)
+        
+        # Plot individual ROC curves
+        for c in range(num_classes):
+            plt.figure()
+            plt.plot(fprs[c], tprs[c])
+            plt.xlabel("False Positive Rate")
+            plt.ylabel("True Positive Rate")
+            plt.title(f"ROC – {self.class_names[c]}")
+            plt.grid(True)
+            
+            out_path = output_dir / f"class_{self.class_names[c]}_roc.png"
+            plt.savefig(out_path)
+            plt.close()
+        
+        # Plot combined ROC curves
+        plt.figure(figsize=(8, 6))
+        
+        for c in range(num_classes):
+            plt.plot(
+                fprs[c],
+                tprs[c],
+                label=self.class_names[c],
+                linewidth=1.5,
+            )
+        
+        # Add random baseline
+        plt.plot([0, 1], [0, 1], "k--", alpha=0.5, label="Random")
+        
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title("ROC Curves (All Classes) - Linear Probe")
+        plt.legend(fontsize="small", ncol=2)
+        plt.grid(True)
+        
+        combined_path = output_dir / "roc_all_classes.png"
+        plt.savefig(combined_path, bbox_inches="tight")
+        plt.close()
+        
+        print(f"ROC curves saved to: {output_dir}")
         
 class KNNProbe:
     """
@@ -801,14 +869,35 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         optimizer = self.hparams.optimizer(params=params)
 
         if self.hparams.scheduler is not None:
-            scheduler = self.hparams.scheduler(optimizer=optimizer)
+            # Handle scheduler instantiation with None value filtering
+            # This is needed because Hydra config merging can leave unwanted params
+            import functools
+            if isinstance(self.hparams.scheduler, functools.partial):
+                # Get the scheduler class and kwargs from the partial
+                scheduler_class = self.hparams.scheduler.func
+                scheduler_kwargs = dict(self.hparams.scheduler.keywords)
+                # Filter out None values that might cause errors
+                scheduler_kwargs = {k: v for k, v in scheduler_kwargs.items() if v is not None}
+                # Instantiate scheduler with filtered kwargs
+                scheduler = scheduler_class(optimizer=optimizer, **scheduler_kwargs)
+            else:
+                # Direct instantiation (backwards compatibility)
+                scheduler = self.hparams.scheduler(optimizer=optimizer)
+            
+            # Determine monitor and interval based on scheduler type
+            scheduler_config = {
+                "scheduler": scheduler,
+                "interval": "epoch",
+                "frequency": 1,
+            }
+            
+            # ReduceLROnPlateau needs a metric to monitor
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler_config["monitor"] = "val/con_loss"
+            
             return {
                 "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "interval": "epoch",
-                    "frequency": 1,
-                },
+                "lr_scheduler": scheduler_config,
             }
 
         return {"optimizer": optimizer}

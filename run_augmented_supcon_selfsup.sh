@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=aug_supcon
+#SBATCH --job-name=aug_supcon_selfsup
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -20,11 +20,11 @@ cd /leonardo/home/userexternal/dgenoves/foundation_model_testing_for_AD
 source ~/.bashrc
 conda activate collidenv
 
-# run augmented supcon training with probe evaluation
+# run self-supervised augmented supcon training with probe evaluation
 python src/train.py \
-  experiment=aug_supcon_15class \
+  experiment=aug_supcon_15class_selfsup \
   paths=fm_testing_cineca \
   data=collide2v_minicineca \
-  logger.mlflow.run_name=aug_supcon_15class_full_training
+  logger.mlflow.run_name=aug_supcon_15class_selfsup_pretraining
 
 echo "Job finished at $(date)"

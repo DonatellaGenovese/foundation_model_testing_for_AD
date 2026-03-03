@@ -10,7 +10,7 @@ dataset_dir: /leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/Collide2vMi
 tmp_data_dir: /leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/tmp/collide_mini_tmp
 
 # path to eos data directory for storing vectorized and preprocessed data
-eos_data_dir: /leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/Collide2vMini/processed
+eos_data_dir: /leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed
 
 # path to logging directory
 log_dir: ${paths.root_dir}/logs/

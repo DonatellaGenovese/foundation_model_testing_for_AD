@@ -11,9 +11,15 @@ linear_probe:
 knn_probe:
   k_values: [1, 3, 5, 10, 20, 50]  # Test multiple k values
   metric: 'cosine'  # Distance metric: 'cosine', 'euclidean', 'minkowski'
+
+# Visualization settings
+save_visualizations: true  # Set to true for UMAP plots
+max_visualization_samples: 10000  # Max samples for UMAP (to avoid memory issues)
+umap_n_neighbors: 15  # UMAP n_neighbors parameter
+umap_min_dist: 0.1    # UMAP min_dist parameter
+umap_metric: 'cosine' # UMAP distance metric
   
 # Output settings
 save_embeddings: true
 save_predictions: true
-save_visualizations: false  # Set to true for t-SNE/UMAP plots
 output_dir: ${paths.output_dir}/probe_evaluation

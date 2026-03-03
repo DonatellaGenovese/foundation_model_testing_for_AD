@@ -14,23 +14,32 @@ defaults:
   - override /model: vanilla_supcon
 
 # Tags and seed
-tags: ["collide2v", "vanillasupcon", "baseline", "6class", "metric_learning"]
+tags: ["collide2v", "vanillasupcon", "baseline", "15class", "metric_learning"]
 
 seed: 42
 
 # Use exactly the same data setup as vanillasupcon_6class_pretrain
 data:
-  batch_size: 512
-  train_val_test_split_per_class: [80000, 10000, 10000]
-  label: "v2_6class_highlevel"
+  batch_size: 1024
+  train_val_test_split_per_class: [100_000, 20_000, 20_000]
+  label: "v2_15class_highlevel_reduced"
   num_workers: 7
   to_classify:
     - "QCD_inclusive"
     - "DY_to_ll"
+    - "Z_to_vv_jet"
+    - "Z_to_qq_uds"
     - "Z_to_bb"
+    - "Z_to_cc"
     - "W_to_lv"
+    - "W_to_qq"
     - "gamma"
+    - "QCD_bb"
+    - "tt_all-hadr"
+    - "tt_semi-lept"
     - "tt_all-lept"
+    - "Minbias_Soft_QCD"
+    - "Upsilon_to_Leptons"
   datasets_config:
     jets:
       cols:
@@ -40,6 +49,7 @@ data:
         - FullReco_JetPuppiAK4_Mass
         - FullReco_JetPuppiAK4_BTag
         - FullReco_JetPuppiAK4_Charge
+        #- FullReco_JetPuppiAK4_NNeutrals
       topk: 12
       count: true
 
@@ -48,8 +58,11 @@ data:
         - FullReco_Electron_PT
         - FullReco_Electron_Eta
         - FullReco_Electron_Phi
+        #- FullReco_Electron_Charge
         - FullReco_Electron_EhadOverEem
         - FullReco_Electron_IsolationVarRhoCorr
+        #- FullReco_Electron_D0
+        #- FullReco_Electron_DZ
       topk: 8
       count: false
 
@@ -58,7 +71,10 @@ data:
         - FullReco_MuonTight_PT
         - FullReco_MuonTight_Eta
         - FullReco_MuonTight_Phi
+        #- FullReco_MuonTight_Charge
         - FullReco_MuonTight_IsolationVarRhoCorr
+        #- FullReco_MuonTight_D0
+        #- FullReco_MuonTight_DZ
       topk: 8
       count: false
 
@@ -67,6 +83,8 @@ data:
         - FullReco_PhotonTight_PT
         - FullReco_PhotonTight_Eta
         - FullReco_PhotonTight_Phi
+        #- FullReco_PhotonTight_EhadOverEem
+        #- FullReco_PhotonTight_IsolationVarRhoCorr
       topk: 8
       count: false
 
@@ -80,7 +98,12 @@ data:
 # Same model hyperparameters as training experiment,
 # but we won't run contrastive training (train=False).
 model:
+  d_model: 512
   n_heads: 8
+  num_layers: 4
+  d_ff: 256
+  dropout: 0
+  compile: false
   projection_dim: 128
   hidden_projection_dim: 256
   temperature: 0.07
@@ -88,19 +111,17 @@ model:
   use_classification_head: false
 
   optimizer:
-    lr: 0.0003
-    weight_decay: 0.00001
+    lr: 2e-4
+    weight_decay: 1e-2
 
-  scheduler:
-    T_max: ${trainer.max_epochs}
-    eta_min: 0.000001
+  scheduler: null
 
 # Trainer is still instantiated but training/testing will be skipped.
 trainer:
-  min_epochs: 2
+  min_epochs: 1
   max_epochs: 10
-  gradient_clip_algorithm: norm
-  gradient_clip_val: 1.0
+  max_steps: 50000
+
 
 # Don't train or test; just run probe evaluation on the untrained encoder.
 train: false
@@ -124,7 +145,7 @@ eval:
     weight_decay: 0.0
 
   knn_probe:
-    k_values: [1, 3, 5, 10, 20]
+    k_values: []
     metric: "cosine"
 
   output_dir: ${paths.output_dir}/probe_evaluation_baseline

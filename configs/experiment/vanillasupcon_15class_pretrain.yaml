@@ -15,22 +15,31 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["collide2v", "vanillasupcon", "pretraining", "6class", "metric_learning"]
+tags: ["collide2v", "vanillasupcon", "pretraining", "15class", "metric_learning"]
 
 seed: 42
 
 data:
-  batch_size: 512  
-  train_val_test_split_per_class: [80000, 10000, 10000] 
-  label: "v2_6class_highlevel"
+  batch_size: 1024
+  train_val_test_split_per_class: [100_000, 20_000, 20_000]
+  label: "v2_15class_highlevel_reduced"
   num_workers: 7
   to_classify:
     - "QCD_inclusive"
     - "DY_to_ll"
+    - "Z_to_vv_jet"
+    - "Z_to_qq_uds"
     - "Z_to_bb"
+    - "Z_to_cc"
     - "W_to_lv"
+    - "W_to_qq"
     - "gamma"
+    - "QCD_bb"
+    - "tt_all-hadr"
+    - "tt_semi-lept"
     - "tt_all-lept"
+    - "Minbias_Soft_QCD"
+    - "Upsilon_to_Leptons"
   datasets_config:
     jets:
       cols:
@@ -40,6 +49,7 @@ data:
         - FullReco_JetPuppiAK4_Mass
         - FullReco_JetPuppiAK4_BTag
         - FullReco_JetPuppiAK4_Charge
+        #- FullReco_JetPuppiAK4_NNeutrals
       topk: 12
       count: true
 
@@ -48,8 +58,11 @@ data:
         - FullReco_Electron_PT
         - FullReco_Electron_Eta
         - FullReco_Electron_Phi
+        #- FullReco_Electron_Charge
         - FullReco_Electron_EhadOverEem
         - FullReco_Electron_IsolationVarRhoCorr
+        #- FullReco_Electron_D0
+        #- FullReco_Electron_DZ
       topk: 8
       count: false
 
@@ -58,7 +71,10 @@ data:
         - FullReco_MuonTight_PT
         - FullReco_MuonTight_Eta
         - FullReco_MuonTight_Phi
+        #- FullReco_MuonTight_Charge
         - FullReco_MuonTight_IsolationVarRhoCorr
+        #- FullReco_MuonTight_D0
+        #- FullReco_MuonTight_DZ
       topk: 8
       count: false
 
@@ -67,6 +83,8 @@ data:
         - FullReco_PhotonTight_PT
         - FullReco_PhotonTight_Eta
         - FullReco_PhotonTight_Phi
+        #- FullReco_PhotonTight_EhadOverEem
+        #- FullReco_PhotonTight_IsolationVarRhoCorr
       topk: 8
       count: false
 
@@ -78,18 +96,21 @@ data:
       count: false
 
 trainer:
-  min_epochs: 5
+  min_epochs: 1
   max_epochs: 50
-  gradient_clip_algorithm: norm
-  gradient_clip_val: 1.0
-  #accumulate_grad_batches: 2  # Effective batch = 512 * 2 = 1024
+  max_steps: 50000
 
 model:
   # Architecture (override some params from base)
+  d_model: 512
   n_heads: 8
+  num_layers: 6
+  d_ff: 2048
+  dropout: 0.08
+  compile: false
   
   # Projection head
-  projection_dim: 128
+  projection_dim: 64
   hidden_projection_dim: 256
   
   # Loss
@@ -99,13 +120,22 @@ model:
   
   # Optimizer (override)
   optimizer:
-    lr: 0.0003  # Increased from base 0.0001
-    weight_decay: 0.00001  # 1e-5
+    lr: 1.73e-4
+    weight_decay: 0.0167
+    eps: 1e-09
+    betas: [0.9, 0.999]
   
-  # Scheduler (override)
+  # Scheduler
   scheduler:
-    T_max: ${trainer.max_epochs}  # Match trainer epochs
-    eta_min: 0.000001  # 1e-6
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: min
+    factor: 0.2
+    patience: 10
+    threshold: 0.0001
+    threshold_mode: rel
+    T_max: null  # Will be filtered out by configure_optimizers
+    eta_min: null  # Will be filtered out by configure_optimizers
 
 preprocess:
   enabled: true
@@ -113,7 +143,7 @@ preprocess:
 logger:
   mlflow:
     experiment_name: "supcon_pretraining"
-    run_name: "vanillasupcon_6class_pretrain"
+    run_name: "vanillasupcon_15class_pretrain"
 
 eval_after_training: true  # Enable automatic probe evaluation
 
@@ -127,5 +157,12 @@ eval:
     # Disable KNN during optimization to save time
     k_values: []
     metric: 'cosine'
+  
+  # UMAP visualization settings
+  save_visualizations: true
+  max_visualization_samples: 10000
+  umap_n_neighbors: 15
+  umap_min_dist: 0.1
+  umap_metric: 'cosine'
   
   output_dir: ${paths.output_dir}/probe_evaluation

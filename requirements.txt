@@ -37,3 +37,4 @@ pytest          # tests
 
 # -------- probes --------- #
 tensorboard
+umap-learn      # for embedding visualization

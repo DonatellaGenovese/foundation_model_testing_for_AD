@@ -41,8 +41,8 @@ data:
         - FullReco_JetPuppiAK4_Phi
         - FullReco_JetPuppiAK4_Mass
         - FullReco_JetPuppiAK4_BTag
-        - FullReco_JetPuppiAK4_NCharged
-        - FullReco_JetPuppiAK4_NNeutrals
+        - FullReco_JetPuppiAK4_Charge
+        #- FullReco_JetPuppiAK4_NNeutrals
       topk: 12
       count: true
 
@@ -51,11 +51,11 @@ data:
         - FullReco_Electron_PT
         - FullReco_Electron_Eta
         - FullReco_Electron_Phi
-        - FullReco_Electron_Charge
+        #- FullReco_Electron_Charge
         - FullReco_Electron_EhadOverEem
         - FullReco_Electron_IsolationVarRhoCorr
-        - FullReco_Electron_D0
-        - FullReco_Electron_DZ
+        #- FullReco_Electron_D0
+        #- FullReco_Electron_DZ
       topk: 8
       count: false
 
@@ -64,10 +64,10 @@ data:
         - FullReco_MuonTight_PT
         - FullReco_MuonTight_Eta
         - FullReco_MuonTight_Phi
-        - FullReco_MuonTight_Charge
+        #- FullReco_MuonTight_Charge
         - FullReco_MuonTight_IsolationVarRhoCorr
-        - FullReco_MuonTight_D0
-        - FullReco_MuonTight_DZ
+        #- FullReco_MuonTight_D0
+        #- FullReco_MuonTight_DZ
       topk: 8
       count: false
 
@@ -76,8 +76,8 @@ data:
         - FullReco_PhotonTight_PT
         - FullReco_PhotonTight_Eta
         - FullReco_PhotonTight_Phi
-        - FullReco_PhotonTight_EhadOverEem
-        - FullReco_PhotonTight_IsolationVarRhoCorr
+        #- FullReco_PhotonTight_EhadOverEem
+        #- FullReco_PhotonTight_IsolationVarRhoCorr
       topk: 8
       count: false
 

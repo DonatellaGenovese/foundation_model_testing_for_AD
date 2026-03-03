@@ -21,6 +21,7 @@ Differences from Vanilla SupCon:
 from typing import Any, Dict, Optional, Tuple
 import os
 import json
+import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -389,6 +390,7 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         mask_probability: float = 0.2,
         mask_full_particle: bool = False,
         num_augmentations: int = 2,
+        self_supervised: bool = False,
         use_classification_head: bool = True,
         classification_weight: float = 0.1,
         allow_single_class_batches: bool = True,
@@ -509,8 +511,22 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         # Stack views: [batch_size * num_augmentations, feature_dim]
         x_augmented = torch.cat(augmented_views, dim=0)
         
-        # Repeat labels for all views: [y1, y2, ..., yN, y1, y2, ..., yN]
-        labels_repeated = labels.repeat(self.hparams.num_augmentations)
+        # Build labels for contrastive loss.
+        #
+        # Supervised mode:
+        #   Use true class labels (y) repeated for each augmented view.
+        #
+        # Self-supervised mode:
+        #   Ignore class labels and use instance identifiers instead.
+        #   Each original sample is treated as its own "class" and all
+        #   augmented views of the same sample form the positive set.
+        if getattr(self.hparams, "self_supervised", False):
+            # Instance IDs: [0, 1, ..., B-1] repeated for each view
+            instance_ids = torch.arange(batch_size, device=labels.device)
+            labels_for_loss = instance_ids.repeat(self.hparams.num_augmentations)
+        else:
+            # Supervised: repeat semantic labels for each view
+            labels_for_loss = labels.repeat(self.hparams.num_augmentations)
         
         # Forward pass through encoder and projection head
         embeddings, projections, logits = self.forward(x_augmented)
@@ -530,7 +546,7 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         else:
             contrastive_loss = self.contrastive_criterion(
                 projections,
-                labels_repeated,
+                labels_for_loss,
                 strict_multi_class=self.training,
                 debug=debug_loss,
             )
@@ -541,7 +557,7 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
             # Return only first view's embeddings/projections for logging
             "embeddings": embeddings[:batch_size],
             "projections": projections[:batch_size],
-            "num_classes_in_batch": torch.tensor(unique_classes, device=labels.device),
+            "num_classes_in_batch": torch.tensor(float(unique_classes), device=labels.device),
             "is_single_class": torch.tensor(
                 1.0 if is_single_class_batch else 0.0,
                 device=labels.device,
@@ -795,14 +811,34 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         
         # Optional: Add learning rate scheduler
         if self.hparams.scheduler is not None:
-            scheduler = self.hparams.scheduler(optimizer=optimizer)
+            # Handle scheduler instantiation with None value filtering
+            # This is needed because Hydra config merging can leave unwanted params
+            if isinstance(self.hparams.scheduler, functools.partial):
+                # Get the scheduler class and kwargs from the partial
+                scheduler_class = self.hparams.scheduler.func
+                scheduler_kwargs = dict(self.hparams.scheduler.keywords)
+                # Filter out None values that might cause errors
+                scheduler_kwargs = {k: v for k, v in scheduler_kwargs.items() if v is not None}
+                # Instantiate scheduler with filtered kwargs
+                scheduler = scheduler_class(optimizer=optimizer, **scheduler_kwargs)
+            else:
+                # Direct instantiation (backwards compatibility)
+                scheduler = self.hparams.scheduler(optimizer=optimizer)
+            
+            # Determine monitor and interval based on scheduler type
+            scheduler_config = {
+                "scheduler": scheduler,
+                "interval": "epoch",
+                "frequency": 1,
+            }
+            
+            # ReduceLROnPlateau needs a metric to monitor
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler_config["monitor"] = "val/con_loss"
+            
             return {
                 "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "interval": "epoch",
-                    "frequency": 1,
-                },
+                "lr_scheduler": scheduler_config,
             }
         
         return {"optimizer": optimizer}

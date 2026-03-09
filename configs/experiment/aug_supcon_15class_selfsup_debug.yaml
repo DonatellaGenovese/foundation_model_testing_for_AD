@@ -1,0 +1,36 @@
+# @package _global_
+
+# DEBUG VERSION: 1 epoch training + eval_after_training with 1 epoch probe
+
+defaults:
+  - vanillasupcon_15class_pretrain
+
+# Override for debug
+trainer:
+  min_epochs: 1
+  max_epochs: 1
+  max_steps: -1
+
+eval_after_training: true
+
+eval:
+  linear_probe:
+    max_epochs: 1
+    lr: 0.001
+    weight_decay: 0.0
+
+  knn_probe:
+    k_values: []
+    metric: 'cosine'
+  
+  save_visualizations: true
+  max_visualization_samples: 10000
+  umap_n_neighbors: 15
+  umap_min_dist: 0.1
+  umap_metric: 'cosine'
+  output_dir: ${paths.output_dir}/probe_evaluation
+
+logger:
+  mlflow:
+    experiment_name: "vanilla_supcon_debug"
+    run_name: "vanilla_supcon_debug_reproducibility_test"

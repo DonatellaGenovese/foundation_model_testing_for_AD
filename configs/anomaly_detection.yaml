@@ -1,0 +1,61 @@
+# @package _global_
+
+# Anomaly Detection with Autoencoder Configuration
+
+defaults:
+  - _self_
+  - data: collide2v_basic
+  - preprocess: collide2v
+  - paths: fm_testing
+  - logger: mlflow
+  - hydra: default
+  - experiment: null
+  - override hydra/hydra_logging: default
+  - override hydra/job_logging: default
+
+# Task name
+task_name: "anomaly_detection"
+
+# Mode: 'raw' (baseline on input features) or 'embeddings' (on contrastive embeddings)
+mode: "raw"  # Start with raw features as baseline
+
+# Encoder checkpoint (only for mode='embeddings')
+ckpt_path: null  # Set this when extracting embeddings or using embeddings mode
+encoder_ckpt: null  # Deprecated, use ckpt_path instead
+# Model class for loading checkpoint (required for embedding extraction)
+# Examples:
+#   - src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule
+#   - src.models.collide2v_augmented_supcon.COLLIDE2VAugmentedSupConLitModule
+#   - src.models.collide2v_tinytransformer.COLLIDE2VTransformerLitModule
+model_class: null
+# Embedding extraction settings
+embedding_output_dir: "${paths.output_dir}/embeddings"
+use_projections: false  # If true, use projection head for SupCon models; if false, use encoder embeddings
+
+# Seed for reproducibility
+seed: 42
+
+# Normal classes (training only on these)
+normal_classes: [0]  # QCD_inclusive - override in experiment config
+
+# Anomaly classes (test these as anomalies)
+anomaly_classes: null  # Override in experiment config
+
+# Tags
+tags: ["anomaly_detection", "autoencoder", "qcd_vs_higgs"]
+
+# Trainer settings
+trainer:
+  max_epochs: 50
+  accelerator: auto
+  devices: 1
+
+# Autoencoder model settings
+model:
+  compression: 16  # Compression ratio (input_dim / bottleneck_dim)
+  depth: 3  # Number of hidden layers in encoder
+  dropout: 0.1
+  lr: 0.001
+  weight_decay: 1e-5
+
+# Override for specific experiment

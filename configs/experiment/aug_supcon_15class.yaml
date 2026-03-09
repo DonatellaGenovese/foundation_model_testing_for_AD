@@ -138,8 +138,8 @@ callbacks:
   model_checkpoint:
     monitor: "val/con_loss"  # Monitor contrastive loss
     mode: "min"
-    save_top_k: 3
-    save_last: true
+    save_top_k: 1
+    save_last: false
     filename: "epoch_{epoch:03d}"
   
   early_stopping:
@@ -167,7 +167,7 @@ eval:
   
   # UMAP visualization settings
   save_visualizations: true
-  max_visualization_samples: 10000
+  max_visualization_samples: 30000
   umap_n_neighbors: 15
   umap_min_dist: 0.1
   umap_metric: 'cosine'

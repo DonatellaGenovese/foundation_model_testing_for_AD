@@ -12,7 +12,7 @@ model_checkpoint:
   monitor: "val/con_loss"
   mode: "min"
   save_top_k: 1
-  save_last: true
+  save_last: false
   auto_insert_metric_name: false
   filename: "epoch_{epoch:03d}"
   

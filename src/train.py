@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
 
 import hydra
 import lightning as L
@@ -158,8 +159,94 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         try:
             from src.eval_probes import evaluate_with_probes
             
-            # Use the trained model (current state)
-            probe_results = evaluate_with_probes(cfg, model, datamodule)
+            # IMPORTANT: Load best checkpoint (not last checkpoint) for evaluation
+            # This ensures consistency with standalone eval_probes.py runs
+            best_ckpt_path = None
+            if hasattr(trainer, 'checkpoint_callback') and trainer.checkpoint_callback:
+                best_ckpt_path = trainer.checkpoint_callback.best_model_path
+                if best_ckpt_path and Path(best_ckpt_path).exists():
+                    log.info(f"Loading BEST checkpoint for probe evaluation: {best_ckpt_path}")
+                    # Load the best checkpoint into the model
+                    checkpoint = torch.load(best_ckpt_path)
+                    model.load_state_dict(checkpoint['state_dict'])
+                    log.info("✓ Best checkpoint loaded successfully")
+                else:
+                    log.warning("Best checkpoint path not found or doesn't exist. Using current model state (last checkpoint).")
+            else:
+                log.warning("No checkpoint callback found. Using current model state (last checkpoint).")
+            
+            # Save encoder state for debugging
+            torch.save(model.encoder.state_dict(), "encoder_training.pth")
+            log.info(f"Saved encoder state to encoder_training.pth for debugging")
+            
+            # ========================================
+            # ENSURE CLEAN STATE FOR REPRODUCIBLE EMBEDDINGS
+            # ========================================
+            log.info("Clearing CUDA cache and ensuring clean state for probe evaluation...")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            
+            # Ensure model is in eval mode with no gradients
+            model.eval()
+            torch.set_grad_enabled(False)
+            
+            # Move model back to device to ensure clean device state
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            model = model.to(device)
+            log.info(f"✓ Model in eval mode on {device} with clean state")
+            
+            # ========================================
+            # DIAGNOSTIC SAVES - TRAINING PATH
+            # ========================================
+            log.info("\n" + "="*80)
+            log.info("SAVING DIAGNOSTICS (TRAINING PATH)")
+            log.info("="*80)
+            
+            import numpy as np
+            debug_dir = Path("debug_comparison")
+            debug_dir.mkdir(exist_ok=True)
+            
+            # 1. Save test dataloader samples
+            log.info("Extracting first batch from test dataloader...")
+            test_dl = datamodule.test_dataloader()
+            test_batch = next(iter(test_dl))
+            test_features, test_labels = test_batch
+            
+            np.savez(
+                debug_dir / "train_path_test_batch.npz",
+                features=test_features.cpu().numpy(),
+                labels=test_labels.cpu().numpy()
+            )
+            log.info(f"Saved first test batch: {test_features.shape}, labels: {test_labels[:20]}")
+            
+            # 2. Save datamodule metadata
+            datamodule_info = {
+                'num_classes': datamodule.num_classes,
+                'batch_size': datamodule.batch_size_per_device,
+                'class_names': datamodule.classnames if hasattr(datamodule, 'classnames') else None,
+                'teststream_shuffle': datamodule.teststream.shuffle if hasattr(datamodule, 'teststream') else None,
+                'source': 'train.py',
+                'datamodule_id': id(datamodule),
+            }
+            
+            # Save test file order if available
+            if hasattr(datamodule, 'teststream') and hasattr(datamodule.teststream, 'all_files'):
+                test_files = datamodule.teststream.all_files
+                datamodule_info['num_test_files'] = len(test_files)
+                datamodule_info['first_5_files'] = [str(f) for f in test_files[:5]]
+                datamodule_info['last_5_files'] = [str(f) for f in test_files[-5:]]
+                log.info(f"Test dataset has {len(test_files)} files")
+                log.info(f"First 5 files: {test_files[:5]}")
+            
+            import json
+            with open(debug_dir / "train_path_datamodule_info.json", 'w') as f:
+                json.dump(datamodule_info, f, indent=2, default=str)
+            
+            log.info(f"Saved datamodule info: {datamodule_info}")
+            log.info("="*80 + "\n")
+            
+            probe_results = evaluate_with_probes(cfg, model, datamodule, call_source='train.py')
             
             # Merge probe results into metric dict
             metric_dict.update(probe_results)

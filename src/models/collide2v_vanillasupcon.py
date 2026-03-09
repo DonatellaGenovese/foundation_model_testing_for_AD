@@ -861,6 +861,82 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         dm = self.trainer.datamodule
         self._build_from_datamodule(dm, stage=stage)
 
+    def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        """
+        Called when loading a checkpoint. Ensures encoder is built before loading weights.
+        
+        This is critical because the encoder is lazily initialized, so we need to
+        construct it with the right architecture before PyTorch Lightning loads the
+        state_dict.
+        """
+        if self._built:
+            return
+        
+        # Get datamodule hyperparameters from checkpoint
+        dm_hparams = checkpoint.get('datamodule_hyper_parameters', {})
+        if not dm_hparams:
+            raise RuntimeError(
+                "Cannot load checkpoint: datamodule_hyper_parameters not found. "
+                "This checkpoint may be from an older version."
+            )
+        
+        # Extract paths and load feature_map
+        paths = dm_hparams.get('paths', {})
+        eos_preproc_dir = paths.get('eos_preproc_dir')
+        if not eos_preproc_dir:
+            raise RuntimeError(
+                "Cannot load checkpoint: eos_preproc_dir not found in datamodule hyperparameters."
+            )
+        
+        feature_map_path = os.path.join(eos_preproc_dir, "feature_map.json")
+        if not os.path.exists(feature_map_path):
+            raise FileNotFoundError(
+                f"Cannot load checkpoint: feature_map.json not found at {feature_map_path}"
+            )
+        
+        with open(feature_map_path, "r") as f:
+            feature_map = json.load(f)
+        
+        # Get number of classes
+        to_classify = dm_hparams.get('to_classify', [])
+        num_classes = len(to_classify)
+        if num_classes == 0:
+            raise RuntimeError(
+                "Cannot load checkpoint: to_classify list is empty in datamodule hyperparameters."
+            )
+        
+        # Build encoder
+        self.encoder = TinyTransformer(
+            feature_map=feature_map,
+            d_model=self.hparams.d_model,
+            n_heads=self.hparams.n_heads,
+            num_layers=self.hparams.num_layers,
+            d_ff=self.hparams.d_ff,
+            dropout=self.hparams.dropout,
+            num_classes=num_classes,
+        )
+        
+        # Build projection head
+        self.projection_head = ProjectionHead(
+            input_dim=self.hparams.d_model,
+            hidden_dim=self.hparams.hidden_projection_dim,
+            output_dim=self.hparams.projection_dim,
+        )
+        
+        # Build classification head if needed
+        if self.hparams.use_classification_head:
+            self.classification_head = nn.Linear(self.hparams.d_model, num_classes)
+            # Update accuracy metrics with correct num_classes
+            self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
+            self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
+        
+        self._built = True
+        
+        print(f"✅ Encoder restored from checkpoint:")
+        print(f"   • Feature map: {feature_map_path}")
+        print(f"   • Num classes: {num_classes}")
+        print(f"   • d_model: {self.hparams.d_model}, layers: {self.hparams.num_layers}")
+
     def configure_optimizers(self) -> Dict[str, Any]:
         params = [p for p in self.parameters() if p.requires_grad]
         if len(params) == 0:

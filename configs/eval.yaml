@@ -11,6 +11,7 @@ defaults:
   - paths: fm_testing
   - extras: default
   - hydra: default
+  - eval: probes  # Include probe evaluation config with UMAP parameters
 
   # choose experiment config with matching data and preprocessing settings to trained model
   - experiment: fm_testing_18class_highlevel
@@ -18,6 +19,9 @@ defaults:
 task_name: "eval"
 
 tags: ["dev"]
+
+# seed for reproducibility
+seed: 42
 
 # passing checkpoint path is necessary for evaluation
 ckpt_path: /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/train/runs/2025-12-03_12-03-45/checkpoints/last.ckpt

@@ -1,0 +1,126 @@
+# @package _global_
+
+# Anomaly Detection: QCD (normal) vs Higgs (anomalies) using EMBEDDINGS from pretrained encoder
+
+defaults:
+  - override /data: collide2v_minicineca
+  - override /paths: fm_testing_cineca
+
+# Mode: embedding (vs raw)
+mode: "embedding"
+
+# Encoder checkpoint for embedding extraction
+ckpt_path: "/leonardo/home/userexternal/dgenoves/foundation_model_testing_for_AD/logs/train/runs/2026-03-04_16-03-01/checkpoints/epoch_022.ckpt"
+
+# Model class (update this based on your checkpoint)
+model_class: "src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule"
+
+# Where to save/load embeddings
+embedding_output_dir: "${paths.output_dir}/embeddings"
+
+# Use projection head embeddings (set to false for encoder embeddings)
+use_projections: true
+
+# Tags
+tags: ["anomaly_detection", "qcd_vs_higgs", "embeddings", "pretrained_encoder"]
+
+# Normal class (training only on this)
+normal_classes: [0]  # QCD_inclusive
+
+# Anomaly classes (test these as anomalies)
+anomaly_classes: [15, 17]  # VBFHbb, ggHtautau
+
+# Data configuration for anomaly detection
+data:
+  batch_size: 512
+  train_val_test_split_per_class: [1000, 200, 200]
+  label: "v2_18class_highlevel"  # Match the raw feature config
+  
+  to_classify:
+    - "QCD_inclusive"
+    - "DY_to_ll"
+    - "Z_to_vv_jet"
+    - "Z_to_qq_uds"
+    - "Z_to_bb"
+    - "Z_to_cc"
+    - "W_to_lv"
+    - "W_to_qq"
+    - "gamma"
+    - "QCD_bb"
+    - "tt_all-hadr"
+    - "tt_semi-lept"
+    - "tt_all-lept"
+    - "Minbias_Soft_QCD"
+    - "Upsilon_to_Leptons"
+    - "VBFHbb"
+    - "ggHtautau"
+  
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+      topk: 12
+      count: true
+
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+      topk: 8
+      count: false
+
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null
+      count: false
+
+# Autoencoder hyperparameters (for embeddings)
+# Input will be projection_dim=128 from encoder+projection head
+model:
+  compression: 4  # Compression ratio: 128 / 4 = 32 bottleneck
+  depth: 1  # Simpler for embeddings: input → hidden → bottleneck
+  dropout: 0.2  # Higher dropout for better regularization
+  lr: 0.001
+  weight_decay: 1e-4
+
+# Trainer
+trainer:
+  max_epochs: 100  # Can train longer on embeddings
+  gradient_clip_val: 1.0
+
+# Preprocessing
+preprocess:
+  enabled: true
+
+# Logger
+logger:
+  mlflow:
+    run_name: "ae_qcd_vs_higgs_embedding"
+    experiment_name: "anomaly_detection"

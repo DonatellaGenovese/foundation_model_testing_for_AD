@@ -115,7 +115,7 @@ model:
   
   # Loss
   temperature: 0.07  # Lowered from base 0.1 for harder negative mining
-  base_temperature: 1.0  # Base temperature for loss scaling
+  base_temperature: 0.07  # Base temperature for loss scaling (should match temperature)
   use_classification_head: false
   
   # Optimizer (override)

@@ -1,0 +1,24 @@
+{
+  "num_classes": 15,
+  "batch_size": 1024,
+  "class_names": "['QCD_inclusive', 'DY_to_ll', 'Z_to_vv_jet', 'Z_to_qq_uds', 'Z_to_bb', 'Z_to_cc', 'W_to_lv', 'W_to_qq', 'gamma', 'QCD_bb', 'tt_all-hadr', 'tt_semi-lept', 'tt_all-lept', 'Minbias_Soft_QCD', 'Upsilon_to_Leptons']",
+  "teststream_shuffle": false,
+  "source": "eval_probes.py",
+  "datamodule_id": 22570681033168,
+  "datamodule_setup_called": true,
+  "num_test_files": 44,
+  "first_5_files": [
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/QCD_HT50toInf', 'QCD_HT50toInf-NEVENT10000-RS26000003_x.npy')",
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/QCD_HT50toInf', 'QCD_HT50toInf-NEVENT10000-RS26000006_x.npy')",
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/QCD_HT50toInf', 'QCD_HT50toInf-NEVENT10000-RS26000017_x.npy')",
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/DYJetsToLL_13TeV-madgraphMLM-pythia8', 'DYJetsToLL_13TeV-madgraphMLM-pythia8-NEVENT10000-RS10000002_x.npy')",
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/DYJetsToLL_13TeV-madgraphMLM-pythia8', 'DYJetsToLL_13TeV-madgraphMLM-pythia8-NEVENT10000-RS10000010_x.npy')"
+  ],
+  "last_5_files": [
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/tt0123j_5f_ckm_LO_MLM_leptonic', 'tt0123j_5f_ckm_LO_MLM_leptonic-NEVENT10000-RS29000015_x.npy')",
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/minbias', 'minbias-NEVENT10000-RS59000023_x.npy')",
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/minbias', 'minbias-NEVENT10000-RS59000024_x.npy')",
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/upsilon_to_leptons', 'upsilon_to_leptons-NEVENT10000-RS60000017_x.npy')",
+    "('/leonardo_scratch/fast/IscrC_ELLIF-HE/donatellagenovese/CollideMini_processed/v2_15class_highlevel_reduced/preprocessed/test/upsilon_to_leptons', 'upsilon_to_leptons-NEVENT10000-RS60000023_x.npy')"
+  ]
+}

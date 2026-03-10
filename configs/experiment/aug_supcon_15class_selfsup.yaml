@@ -1,14 +1,13 @@
 # @package _global_
 
-# Experiment: Self-Supervised Augmented Contrastive Learning for 6-class COLLIDE2V
+# Experiment: Augmented Self-Supervised Contrastive Learning for 15-class COLLIDE2V
 #
-# Differences from aug_supcon_6class:
-# - self_supervised: true  (instance discrimination, no labels in loss)
-# - use_classification_head: false (pure representation learning)
+# Note:
+# - Contrastive positives are augmented views of the same instance.
 
 defaults:
   - override /data: collide2v_minicineca
-  - override /model: augmented_supcon
+  - override /model: augmented_selfsupcon
   - override /callbacks: supcon
   - override /trainer: gpu
 
@@ -93,50 +92,8 @@ data:
       count: false
 
 model:
-  # Architecture (matching vanilla supcon optimized params)
-  d_model: 512
-  n_heads: 8
-  num_layers: 6
-  d_ff: 2048
-  dropout: 0.08
-  compile: false
-
-  # Projection head
-  projection_dim: 64
-  hidden_projection_dim: 256
-
-  # Augmentation settings
-  mask_probability: 0.2
-  mask_full_particle: false
-  num_augmentations: 2
-
-  # Loss
-  temperature: 0.07
-  base_temperature: 0.07
-
-  # Self-supervised: ignore class labels in contrastive loss
+  # Keep explicit self-supervised switch for readability.
   self_supervised: true
-  use_classification_head: false
-  classification_weight: 0.0
-
-  # Optimizer (matching vanilla supcon optimized params)
-  optimizer:
-    lr: 1.73e-4
-    weight_decay: 0.0167
-    eps: 1e-09
-    betas: [0.9, 0.999]
-  
-  # Scheduler
-  scheduler:
-    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-    _partial_: true
-    mode: min
-    factor: 0.2
-    patience: 10
-    threshold: 0.0001
-    threshold_mode: rel
-    T_max: null  # Will be filtered out by configure_optimizers
-    eta_min: null  # Will be filtered out by configure_optimizers
 
 trainer:
   min_epochs: 1

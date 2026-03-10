@@ -1,5 +1,5 @@
 """
-Augmented Supervised Contrastive Learning (Aug-SupCon) for COLLIDE2V.
+Augmented Self-Supervised Contrastive Learning (Aug-SelfSupCon) for COLLIDE2V.
 
 This module implements metric learning with data augmentation to create a robust
 discriminative embedding space where events from the same physics process cluster
@@ -9,12 +9,12 @@ Key Components:
 1. Augmentation: Random masking to create multiple views of each sample
 2. Encoder: TinyTransformer backbone (shared for all views)
 3. Projection Head: 2-layer MLP for contrastive learning (discarded after training)
-4. SimCLR Loss: Contrastive loss that treats augmented views as positives
+4. SimCLR Loss: Instance-discrimination loss where augmented views are positives
 5. Classification Head: Optional for monitoring (can be removed)
 
 Differences from Vanilla SupCon:
 - Applies random masking augmentation to create two views per sample
-- Uses SimCLR-style loss that considers both augmented views and same-class samples as positives
+- Uses SimCLR-style loss with instance positives (no class labels in contrastive loss)
 - More robust to input variations and missing information
 """
 
@@ -179,7 +179,7 @@ class ProjectionHead(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, output_dim),
             # Note: No activation on final layer - embeddings are L2 normalized later
@@ -195,7 +195,7 @@ class ProjectionHead(nn.Module):
         return self.net(x)
 
 
-class SupConLoss(nn.Module):
+class ConLoss(nn.Module):
     """
     Supervised Contrastive Learning loss (SupCon).
     
@@ -246,7 +246,7 @@ class SupConLoss(nn.Module):
 
         #check the batch size for control
         if batch_size < 2:
-            raise ValueError("SupConLoss requires batch_size >= 2.")
+            raise ValueError("ConLoss requires batch_size >= 2.")
         
         # Ensure labels is proper shape [B, 1]
         labels = labels.contiguous().view(-1, 1)
@@ -256,7 +256,7 @@ class SupConLoss(nn.Module):
         num_classes_in_batch = len(unique_classes)
         
         if debug:
-            print(f"\n[SupConLoss DEBUG]")
+            print(f"\n[ConLoss DEBUG]")
             print(f"  Batch size: {batch_size}")
             print(f"  Num unique classes: {num_classes_in_batch}")
             print(f"  Classes: {unique_classes.cpu().numpy()}")
@@ -272,7 +272,7 @@ class SupConLoss(nn.Module):
         if num_classes_in_batch < 2:
             if strict_multi_class:
                 raise ValueError(
-                    "SupConLoss received a single-class batch. "
+                    "ConLoss received a single-class batch. "
                     "Need at least 2 classes per batch for meaningful contrastive learning."
                 )
             else:
@@ -344,20 +344,20 @@ class SupConLoss(nn.Module):
         return loss
 
 
-class COLLIDE2VAugmentedSupConLitModule(LightningModule):
+class COLLIDE2VAugmentedSelfSupConLitModule(LightningModule):
     """
-    Augmented Supervised Contrastive Learning Module for COLLIDE2V.
+    Augmented Self-Supervised Contrastive Learning Module for COLLIDE2V.
     
     This module trains an encoder to produce discriminative embeddings using:
     1. Data augmentation (random masking) to create multiple views
-    2. Contrastive learning to pull same-class samples together
+    2. Contrastive learning to pull two augmented views of the same sample together
     3. Optional classification head for monitoring
     
     Training Strategy:
     - For each batch, create 2 augmented views of each sample
     - Pass both views through the encoder (shared weights)
     - Project embeddings to contrastive space
-    - Compute SimCLR loss: treat same-class samples as positives
+    - Compute SimCLR loss: treat augmented views of the same sample as positives
     - Optionally train a classification head for monitoring
     
     After Training:
@@ -399,7 +399,7 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         mask_full_particle: bool = False,
         num_augmentations: int = 2,
         silhouette_max_samples: int = 20000,
-        self_supervised: bool = False,
+        self_supervised: bool = True,
         use_classification_head: bool = True,
         classification_weight: float = 0.1,
         allow_single_class_batches: bool = True,
@@ -427,17 +427,19 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         self._val_emb_cache = []
         self._val_label_cache = []
 
-        # This module is supervised-only by design.
+        # This module is self-supervised-only by design.
         # Keep this parameter for backwards compatibility with older configs,
-        # but fail fast if self-supervised mode is requested.
-        if self_supervised:
+        # but fail fast if disabled by mistake.
+        if not self_supervised:
             raise ValueError(
-                "COLLIDE2VAugmentedSupConLitModule only supports supervised contrastive loss. "
-                "Set model.self_supervised=false (or remove it from the config)."
+                "COLLIDE2VAugmentedSelfSupConLitModule only supports self-supervised contrastive loss. "
+                "Set model.self_supervised=true (or remove this field from the config)."
             )
+        if num_augmentations < 2:
+            raise ValueError("Self-supervised contrastive learning requires num_augmentations >= 2.")
         
         # Loss functions
-        self.contrastive_criterion = SupConLoss(temperature=temperature, base_temperature=base_temperature)
+        self.contrastive_criterion = ConLoss(temperature=temperature, base_temperature=base_temperature)
         self.classification_criterion = nn.CrossEntropyLoss() if use_classification_head else None
         
         # Training metrics
@@ -522,8 +524,8 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         batch_size = x.shape[0]
 
         # Number of views:
-        # - training: usually hparams.num_augmentations
-        # - validation/test: can be overridden to 1 for embedding-quality proxy
+        # - training: hparams.num_augmentations
+        # - validation/test proxy: can be overridden to 1
         n_views = self.hparams.num_augmentations if num_views is None else num_views
         if n_views < 1:
             raise ValueError("num_views must be >= 1")
@@ -542,31 +544,35 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         # Stack views: [batch_size * n_views, feature_dim]
         x_augmented = torch.cat(augmented_views, dim=0)
         
-        # Supervised only: repeat semantic labels for each selected view.
-        labels_for_loss = labels.repeat(n_views)
+        # Label strategy:
+        # - training/self-supervised path: instance IDs across views
+        # - validation/test proxy with single view: semantic labels for class-separation proxy
+        if (not self.training) and n_views == 1:
+            labels_for_loss = labels
+            strict_multi_class = True
+        else:
+            instance_ids = torch.arange(batch_size, device=labels.device)
+            labels_for_loss = instance_ids.repeat(n_views)
+            strict_multi_class = False
         
         # Forward pass through encoder and projection head
         embeddings, projections, logits = self.forward(x_augmented)
         
-        # Check for single-class batches
+        # Keep semantic label diagnostics for monitoring only.
         unique_classes = torch.unique(labels).numel()
         is_single_class_batch = unique_classes < 2
         
         # DEBUG: Print on first batch
         debug_loss = (batch_idx == 0 and self.training)
         
-        # Compute contrastive loss over all augmented views
-        if is_single_class_batch and self.hparams.allow_single_class_batches:
-            contrastive_loss = projections.new_zeros((), requires_grad=True)
-            if debug_loss:
-                print(f"\n[AugSupCon] Single-class batch detected. Returning zero loss.")
-        else:
-            contrastive_loss = self.contrastive_criterion(
-                projections,
-                labels_for_loss,
-                strict_multi_class=self.training,
-                debug=debug_loss,
-            )
+        # Compute contrastive loss over all augmented views.
+        # strict_multi_class is enabled only for semantic-label proxy in val/test.
+        contrastive_loss = self.contrastive_criterion(
+            projections,
+            labels_for_loss,
+            strict_multi_class=strict_multi_class,
+            debug=debug_loss,
+        )
         
         # Prepare return dictionary
         result = {
@@ -727,7 +733,6 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
             embeddings = torch.cat(self._val_emb_cache, dim=0).numpy()
             labels = torch.cat(self._val_label_cache, dim=0).numpy()
 
-            # Optional deterministic subsampling for compute/memory control.
             max_samples = int(self.hparams.silhouette_max_samples)
             if embeddings.shape[0] > max_samples:
                 rng = np.random.default_rng(42)
@@ -742,13 +747,13 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
                     self.log("val/silhouette", sil, on_step=False, on_epoch=True, prog_bar=True)
                 except Exception as e:
                     if not self._silhouette_warned:
-                        print(f"[AugSupCon] Could not compute silhouette score: {e}")
+                        print(f"[AugSelfSupCon] Could not compute silhouette score: {e}")
                         self._silhouette_warned = True
             elif not self._silhouette_warned:
-                print("[AugSupCon] Skipping silhouette score: need at least 2 classes in validation embeddings.")
+                print("[AugSelfSupCon] Skipping silhouette score: need at least 2 classes in validation embeddings.")
                 self._silhouette_warned = True
         elif silhouette_score is None and not self._silhouette_warned:
-            print("[AugSupCon] sklearn not installed; skipping silhouette score logging.")
+            print("[AugSelfSupCon] sklearn not installed; skipping silhouette score logging.")
             self._silhouette_warned = True
 
         # Clear caches every validation epoch.

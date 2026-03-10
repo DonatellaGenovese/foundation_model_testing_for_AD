@@ -62,7 +62,7 @@ class ProjectionHead(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, output_dim),
             # Note: No activation on final layer - embeddings are L2 normalized later
@@ -173,7 +173,8 @@ class SupConLoss(nn.Module):
         logits = similarity_matrix - logits_max.detach()
         
         # Compute exp(similarity / temperature)
-        exp_logits = torch.exp(logits / self.temperature)
+        logits = logits / self.temperature
+        exp_logits = torch.exp(logits)
         
         # Create mask to remove self-similarity (diagonal elements)
         # We don't want to compare a sample with itself
@@ -190,7 +191,7 @@ class SupConLoss(nn.Module):
         # Compute log probability for each positive pair
         # Numerator: similarity to positive
         # Denominator: sum of similarities to all samples (except self)
-        log_prob = logits / self.temperature - torch.log(
+        log_prob = logits - torch.log(
             (exp_logits * logits_mask).sum(1, keepdim=True) + 1e-9  # Add epsilon for stability
         )
         
@@ -797,30 +798,13 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
             self.val_acc_best(acc)
             self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
 
-    def _build_from_datamodule(self, dm: Any, stage: str = "fit") -> None:
-        """Initialize encoder and heads from a COLLIDE2V datamodule.
-
-        Normally called via ``setup()`` when training with a Trainer, but it
-        can also be used manually (e.g. for baseline probe evaluation without
-        running a training loop).
-        """
-
-        if self._built:
-            return
-
-        paths = getattr(dm, "paths", None)
-        if paths is None or "eos_preproc_dir" not in paths:
-            raise RuntimeError("datamodule.paths['eos_preproc_dir'] is required to build the encoder.")
-
-        eos_preproc_dir = paths["eos_preproc_dir"]
-        feature_map_path = os.path.join(eos_preproc_dir, "feature_map.json")
-        with open(feature_map_path, "r") as f:
-            feature_map = json.load(f)
-
-        num_classes = getattr(dm, "num_classes", None)
-        if num_classes is None:
-            raise RuntimeError("datamodule.num_classes is None.")
-
+    def _build_model_components(
+        self,
+        feature_map: Dict[str, Any],
+        num_classes: int,
+        stage: Optional[str] = None,
+    ) -> None:
+        """Build all lazily initialized model components in one place."""
         self.encoder = TinyTransformer(
             feature_map=feature_map,
             d_model=self.hparams.d_model,
@@ -846,6 +830,32 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
             self.encoder = torch.compile(self.encoder)
 
         self._built = True
+
+    def _build_from_datamodule(self, dm: Any, stage: str = "fit") -> None:
+        """Initialize encoder and heads from a COLLIDE2V datamodule.
+
+        Normally called via ``setup()`` when training with a Trainer, but it
+        can also be used manually (e.g. for baseline probe evaluation without
+        running a training loop).
+        """
+
+        if self._built:
+            return
+
+        paths = getattr(dm, "paths", None)
+        if paths is None or "eos_preproc_dir" not in paths:
+            raise RuntimeError("datamodule.paths['eos_preproc_dir'] is required to build the encoder.")
+
+        eos_preproc_dir = paths["eos_preproc_dir"]
+        feature_map_path = os.path.join(eos_preproc_dir, "feature_map.json")
+        with open(feature_map_path, "r") as f:
+            feature_map = json.load(f)
+
+        num_classes = getattr(dm, "num_classes", None)
+        if num_classes is None:
+            raise RuntimeError("datamodule.num_classes is None.")
+
+        self._build_model_components(feature_map=feature_map, num_classes=num_classes, stage=stage)
 
     def setup(self, stage: str) -> None:
         self._setup_calls += 1
@@ -905,32 +915,7 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
                 "Cannot load checkpoint: to_classify list is empty in datamodule hyperparameters."
             )
         
-        # Build encoder
-        self.encoder = TinyTransformer(
-            feature_map=feature_map,
-            d_model=self.hparams.d_model,
-            n_heads=self.hparams.n_heads,
-            num_layers=self.hparams.num_layers,
-            d_ff=self.hparams.d_ff,
-            dropout=self.hparams.dropout,
-            num_classes=num_classes,
-        )
-        
-        # Build projection head
-        self.projection_head = ProjectionHead(
-            input_dim=self.hparams.d_model,
-            hidden_dim=self.hparams.hidden_projection_dim,
-            output_dim=self.hparams.projection_dim,
-        )
-        
-        # Build classification head if needed
-        if self.hparams.use_classification_head:
-            self.classification_head = nn.Linear(self.hparams.d_model, num_classes)
-            # Update accuracy metrics with correct num_classes
-            self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
-            self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
-        
-        self._built = True
+        self._build_model_components(feature_map=feature_map, num_classes=num_classes)
         
         print(f"✅ Encoder restored from checkpoint:")
         print(f"   • Feature map: {feature_map_path}")

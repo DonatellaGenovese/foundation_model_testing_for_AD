@@ -3,7 +3,7 @@
 # DEBUG VERSION: 1 epoch training + eval_after_training with 1 epoch probe
 
 defaults:
-  - vanillasupcon_15class_pretrain
+  - aug_supcon_15class_selfsup
 
 # Override for debug
 trainer:
@@ -32,5 +32,5 @@ eval:
 
 logger:
   mlflow:
-    experiment_name: "vanilla_supcon_debug"
-    run_name: "vanilla_supcon_debug_reproducibility_test"
+    experiment_name: "augmented_selfsupcon_debug"
+    run_name: "aug_selfsupcon_debug_reproducibility_test"

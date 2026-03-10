@@ -35,6 +35,7 @@ from src.models.collide2v_vanillasupcon import (
     KNNProbe,
 )
 from src.models.collide2v_augmented_supcon import COLLIDE2VAugmentedSupConLitModule
+from src.models.collide2v_augmented_selfsupcon import COLLIDE2VAugmentedSelfSupConLitModule
 from src.utils import RankedLogger
 
 log = RankedLogger(__name__, rank_zero_only=True)
@@ -47,7 +48,6 @@ def extract_embeddings(
     max_samples: int = None,
     stratified: bool = True,
     num_classes: int = None,
-    force_cpu_for_determinism: bool = True,  # NEW: Force CPU for perfect determinism
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extract embeddings from encoder for all samples in dataloader.
@@ -59,19 +59,12 @@ def extract_embeddings(
         max_samples: Maximum number of samples to extract (None = all)
         stratified: If True, sample evenly from all classes
         num_classes: Number of classes (required if stratified=True)
-        force_cpu_for_determinism: If True, use CPU for perfectly deterministic results
     
     Returns:
         embeddings: [N, d_model] numpy array
         labels: [N] numpy array of class labels
     """
     encoder.eval()
-    
-    # For perfect reproducibility, use CPU to avoid GPU non-determinism
-    if force_cpu_for_determinism:
-        device = 'cpu'
-        log.info("Using CPU for embedding extraction (perfect determinism)")
-    
     encoder.to(device)
     
     # Force complete determinism for reproducible embeddings
@@ -260,7 +253,11 @@ def visualize_embeddings_umap(
 
 def evaluate_with_probes(
     cfg: DictConfig,
-    model: Union[COLLIDE2VVanillaSupConLitModule, COLLIDE2VAugmentedSupConLitModule],
+    model: Union[
+        COLLIDE2VVanillaSupConLitModule,
+        COLLIDE2VAugmentedSupConLitModule,
+        COLLIDE2VAugmentedSelfSupConLitModule,
+    ],
     datamodule: LightningDataModule,
     call_source: str = 'standalone',
 ) -> Dict[str, float]:
@@ -468,10 +465,7 @@ def evaluate_with_probes(
         
         # Extract embeddings from test set
         max_viz_samples = eval_cfg.get("max_visualization_samples", 10000)
-        force_cpu = eval_cfg.get("force_cpu_for_embeddings", True)
         log.info(f"Extracting embeddings from test set (max {max_viz_samples} samples)...")
-        if force_cpu:
-            log.info("⚠️  Using CPU for embedding extraction (slower but perfectly deterministic)")
         
         test_embeddings, test_labels = extract_embeddings(
             encoder=encoder,
@@ -480,7 +474,6 @@ def evaluate_with_probes(
             max_samples=max_viz_samples,
             stratified=True,
             num_classes=datamodule.num_classes,
-            force_cpu_for_determinism=force_cpu,
         )
         
         log.info(f"Extracted {len(test_embeddings)} embeddings with shape {test_embeddings.shape}")
@@ -958,10 +951,11 @@ def main(cfg: DictConfig) -> None:
     log.info(f"Loading checkpoint: {ckpt_path}")
     log.info(f"{'='*80}\n")
     
-    # Load pretrained model (vanilla SupCon or augmented SupCon)
+    # Load pretrained model (vanilla SupCon, augmented SupCon, or augmented self-supervised SupCon)
     model = None
     vanilla_error = None
     augmented_error = None
+    augmented_selfsup_error = None
 
     # 1) Try vanilla SupCon checkpoint
     try:
@@ -983,9 +977,21 @@ def main(cfg: DictConfig) -> None:
             log.info("Loaded checkpoint as COLLIDE2VAugmentedSupConLitModule.")
         except Exception as e:
             augmented_error = str(e)
+
+    # 3) Fallback: try augmented self-supervised SupCon checkpoint
+    if model is None:
+        try:
+            model = COLLIDE2VAugmentedSelfSupConLitModule.load_from_checkpoint(
+                str(ckpt_path), weights_only=False
+            )
+            log.info("Loaded checkpoint as COLLIDE2VAugmentedSelfSupConLitModule.")
+        except Exception as e:
+            augmented_selfsup_error = str(e)
             log.error(
-                "Failed to load checkpoint as either vanilla or augmented SupCon model. "
-                f"Vanilla error: {vanilla_error}; Augmented error: {augmented_error}"
+                "Failed to load checkpoint as vanilla, augmented supervised, or augmented self-supervised model. "
+                f"Vanilla error: {vanilla_error}; "
+                f"Augmented supervised error: {augmented_error}; "
+                f"Augmented self-supervised error: {augmented_selfsup_error}"
             )
             raise
 

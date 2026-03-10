@@ -6,7 +6,7 @@ Trains an autoencoder on QCD (normal class) and detects Higgs variants as anomal
 Usage:
     python src/train_anomaly_detection.py \
         experiment=anomaly_qcd_vs_higgs_raw \
-        data.normal_class=[list of your normal classes] \
+        data.normal_classes=[list of your normal classes] \
         data.anomaly_classes=[list of your anomaly classes]
 """
 
@@ -162,7 +162,7 @@ def main(cfg: DictConfig):
     base_datamodule.prepare_data()
         
     # Wrap datamodule with filtering to only include normal + anomaly classes
-    log.info(f"Filtering to: normal_class={cfg.normal_classes}, anomaly_classes={cfg.get('anomaly_classes', [])}")
+    log.info(f"Filtering to: normal_classes={cfg.normal_classes}, anomaly_classes={cfg.get('anomaly_classes', [])}")
     datamodule = FilteredDataModuleWrapper(
         base_datamodule=base_datamodule,
         normal_classes=cfg.normal_classes,
@@ -191,7 +191,7 @@ def main(cfg: DictConfig):
     log.info(f"  Input dim: {input_dim}")
     log.info(f"  Bottleneck dim: {cfg.model.bottleneck_dim}")
     log.info(f"  Hidden dims: {cfg.model.hidden_dims}")
-    log.info(f"  Training on normal class: {cfg.normal_class}")
+    log.info(f"  Training on normal classes: {cfg.normal_classes}")
     
     # Callbacks
     callbacks = []

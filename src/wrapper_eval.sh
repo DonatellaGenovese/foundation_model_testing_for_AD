@@ -26,7 +26,7 @@ ACCELERATOR=$(python - << 'EOF'
 from hydra import initialize, compose
 
 with initialize(version_base="1.3", config_path="configs"):
-    cfg = compose(config_name="train.yaml")
+    cfg = compose(config_name="eval.yaml")
 
 print(cfg.trainer.get("accelerator", "cpu"))
 EOF
@@ -42,11 +42,11 @@ else
     echo "[wrapper] CPU mode → running without --nv"
 fi
 
-# --- Run training inside container ---
-echo "[wrapper] Running training with flags: $APPTAINER_FLAGS"
+# --- Run evaluation inside container ---
+echo "[wrapper] Running evaluation with flags: $APPTAINER_FLAGS"
 
 apptainer exec $APPTAINER_FLAGS "${IMAGE}" bash -lc "
-  python src/train.py -m hparams_search=collide2v_optuna_multiclass_scheduler hydra.sweeper.sampler.seed=${SEED}
+  python src/eval.py
 "
 
 EXIT_CODE=$?

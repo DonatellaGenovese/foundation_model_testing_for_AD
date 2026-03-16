@@ -86,6 +86,7 @@ model:
   n_heads: 16
   num_layers: 6
   d_ff: 2048
+  scheduler: null
 
 
 #callbacks:

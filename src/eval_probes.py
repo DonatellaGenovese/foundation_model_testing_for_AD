@@ -373,10 +373,9 @@ def evaluate_with_probes(
         log.info(f"First 5 files: {test_files[:5]}")
         log.info(f"Last 5 files: {test_files[-5:]}")
     
-    import json
     with open(debug_dir / f"{file_prefix}_datamodule_info.json", 'w') as f:
         json.dump(datamodule_info, f, indent=2, default=str)
-    
+
     log.info(f"Saved datamodule info to: {debug_dir / f'{file_prefix}_datamodule_info.json'}")
     log.info("="*80 + "\n")
     
@@ -1021,7 +1020,6 @@ def main(cfg: DictConfig) -> None:
     datamodule.setup(stage="fit")
     log.info("Datamodule setup complete")
     
-    import numpy as np
     debug_dir = Path("debug_comparison")
     debug_dir.mkdir(exist_ok=True)
     
@@ -1055,7 +1053,6 @@ def main(cfg: DictConfig) -> None:
         log.info(f"Test dataset has {len(test_files)} files")
         log.info(f"First 5 files: {test_files[:5]}")
     
-    import json
     with open(debug_dir / "eval_path_datamodule_info_before.json", 'w') as f:
         json.dump(datamodule_info, f, indent=2, default=str)
     

@@ -191,6 +191,12 @@ class COLLIDE2VTransformerLitModule(LightningModule):
 
         self.val_roc.reset()
 
+        # Log batch class composition
+        num_classes_in_batch = torch.unique(targets).numel()
+        is_single_class = float(num_classes_in_batch < 2)
+        self.log("val/num_classes_in_batch", float(num_classes_in_batch), on_step=False, on_epoch=True)
+        self.log("val/single_class_batch", is_single_class, on_step=False, on_epoch=True)
+
         return {"probs": probs}
 
     def on_validation_epoch_end(self) -> None:
@@ -229,6 +235,12 @@ class COLLIDE2VTransformerLitModule(LightningModule):
         self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
+
+        # Log batch class composition
+        num_classes_in_batch = torch.unique(targets).numel()
+        is_single_class = float(num_classes_in_batch < 2)
+        self.log("test/num_classes_in_batch", float(num_classes_in_batch), on_step=False, on_epoch=True)
+        self.log("test/single_class_batch", is_single_class, on_step=False, on_epoch=True)
 
         return {"probs": probs, "logits": logits}
 

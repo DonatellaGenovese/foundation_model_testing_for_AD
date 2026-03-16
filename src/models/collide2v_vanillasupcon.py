@@ -37,6 +37,10 @@ from sklearn.metrics import (
     roc_auc_score,
     confusion_matrix
 )
+try:
+    from sklearn.metrics import silhouette_score
+except ImportError:
+    silhouette_score = None
 
 from .components.transformer import TinyTransformer
 
@@ -588,6 +592,7 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         use_classification_head: bool = True,
         classification_weight: float = 0.1,
         allow_single_class_batches: bool = True,
+        silhouette_max_samples: int = 20000,
         optimizer: Any = None,
         scheduler: Optional[Any] = None,
         compile: bool = False,
@@ -605,6 +610,11 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         self._setup_calls = 0
         self._setup_calls_to_log: Optional[float] = None
 
+        # Silhouette score caches
+        self._val_emb_cache = []
+        self._val_label_cache = []
+        self._silhouette_warned = False
+
         # Losses
         self.contrastive_criterion = SupConLoss(temperature=temperature, base_temperature=base_temperature)
         self.classification_criterion = nn.CrossEntropyLoss() if use_classification_head else None
@@ -616,8 +626,9 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         if use_classification_head:
             self.train_classification_loss = MeanMetric()
             self.val_classification_loss = MeanMetric()
-            self.train_acc = Accuracy(task="multiclass", num_classes=6)  # overwritten in setup()
-            self.val_acc = Accuracy(task="multiclass", num_classes=6)
+            # Placeholder metrics — replaced with correct num_classes in _build_model_components()
+            self.train_acc = None
+            self.val_acc = None
             self.val_acc_best = MaxMetric()
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
@@ -754,6 +765,10 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         self.log("val/con_loss", self.val_contrastive_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/loss", loss, on_step=False, on_epoch=True)
 
+        # Cache embeddings for silhouette score at epoch end
+        self._val_emb_cache.append(outputs["embeddings"].detach().cpu())
+        self._val_label_cache.append(labels.detach().cpu())
+
         # Log batch statistics (mirror train_step behavior)
         self.log(
             "debug/val_num_classes_in_batch",
@@ -793,6 +808,38 @@ class COLLIDE2VVanillaSupConLitModule(LightningModule):
         self.log("debug/gradnorm_projection", proj_grad, on_step=True, on_epoch=False)
 
     def on_validation_epoch_end(self) -> None:
+        # Compute silhouette score from cached validation embeddings
+        if self._val_emb_cache and silhouette_score is not None:
+            embeddings = torch.cat(self._val_emb_cache, dim=0).numpy()
+            labels = torch.cat(self._val_label_cache, dim=0).numpy()
+
+            max_samples = int(self.hparams.silhouette_max_samples)
+            if embeddings.shape[0] > max_samples:
+                rng = np.random.default_rng(42)
+                idx = rng.choice(embeddings.shape[0], size=max_samples, replace=False)
+                embeddings = embeddings[idx]
+                labels = labels[idx]
+
+            unique_labels = np.unique(labels)
+            if unique_labels.size >= 2 and unique_labels.size < embeddings.shape[0]:
+                try:
+                    sil = float(silhouette_score(embeddings, labels, metric="cosine"))
+                    self.log("val/silhouette", sil, on_step=False, on_epoch=True, prog_bar=True)
+                except Exception as e:
+                    if not self._silhouette_warned:
+                        print(f"[VanillaSupCon] Could not compute silhouette score: {e}")
+                        self._silhouette_warned = True
+            elif not self._silhouette_warned:
+                print("[VanillaSupCon] Skipping silhouette score: need at least 2 classes in validation embeddings.")
+                self._silhouette_warned = True
+        elif silhouette_score is None and not self._silhouette_warned:
+            print("[VanillaSupCon] sklearn not installed; skipping silhouette score logging.")
+            self._silhouette_warned = True
+
+        # Clear caches every validation epoch
+        self._val_emb_cache.clear()
+        self._val_label_cache.clear()
+
         if self.hparams.use_classification_head:
             acc = self.val_acc.compute()
             self.val_acc_best(acc)

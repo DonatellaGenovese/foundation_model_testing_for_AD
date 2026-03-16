@@ -549,7 +549,7 @@ class COLLIDE2VAugmentedSelfSupConLitModule(LightningModule):
         # - validation/test proxy with single view: semantic labels for class-separation proxy
         if (not self.training) and n_views == 1:
             labels_for_loss = labels
-            strict_multi_class = True
+            strict_multi_class = False
         else:
             instance_ids = torch.arange(batch_size, device=labels.device)
             labels_for_loss = instance_ids.repeat(n_views)

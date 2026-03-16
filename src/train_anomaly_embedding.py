@@ -15,7 +15,6 @@ from pathlib import Path
 import os
 import subprocess
 import sys
-
 import hydra
 import rootutils
 import torch
@@ -246,27 +245,34 @@ def main(cfg: DictConfig):
         anomaly_classes=cfg.get("anomaly_classes", []),
     )
     
+    # Bug 1 fix: call setup() so embedding_dim is populated
+    embedding_datamodule.setup()
+
     # Get embedding dimension
     input_dim = embedding_datamodule.embedding_dim
     log.info(f"Embedding dimension: {input_dim}")
-    
+
+    compression = cfg.model.get("compression", 4)
+    depth = cfg.model.get("depth", 2)
+    log.info(f"Derived AE dims: compression={compression}, depth={depth}, bottleneck={input_dim // compression}")
+
     # Create autoencoder
     log.info("Creating autoencoder for embeddings...")
     ae_model = AutoencoderLitModule(
         input_dim=input_dim,
-        bottleneck_dim=cfg.model.bottleneck_dim,
-        hidden_dims=cfg.model.hidden_dims,
+        compression=compression,
+        depth=depth,
         dropout=cfg.model.dropout,
         lr=cfg.model.lr,
         weight_decay=cfg.model.weight_decay,
-        normal_classes=cfg.normal_classes,
-        anomaly_classes=cfg.get("anomaly_classes", None),
+        normal_classes_labels=cfg.normal_classes,
+        anomaly_classes_labels=cfg.get("anomaly_classes", None),
     )
     
     log.info(f"Autoencoder architecture:")
     log.info(f"  Input dim (embedding): {input_dim}")
-    log.info(f"  Bottleneck dim: {cfg.model.bottleneck_dim}")
-    log.info(f"  Hidden dims: {cfg.model.hidden_dims}")
+    log.info(f"  Bottleneck dim: {input_dim // compression}")
+    log.info(f"  Depth: {depth}")
     log.info(f"  Training on normal class: {cfg.normal_classes}")
     
     # Callbacks

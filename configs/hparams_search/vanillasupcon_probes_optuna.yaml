@@ -55,7 +55,10 @@ hydra:
       # Proiezione SupCon
       model.projection_dim: choice(64, 128)
       model.hidden_projection_dim: choice(128, 256)
+      # temperature and base_temperature swept together so their ratio stays ~1.0,
+      # isolating contrastive sharpness from the loss gradient scale multiplier
       model.temperature: tag(lin, interval(0.05, 0.15))
+      model.base_temperature: tag(lin, interval(0.05, 0.15))
 
       # Ottimizzatore
       model.optimizer.lr: tag(log, interval(1e-4, 5e-4))

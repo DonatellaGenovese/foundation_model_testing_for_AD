@@ -20,6 +20,9 @@ temperature: 0.1
 base_temperature: 0.1  # Should match temperature for standard behavior
 allow_single_class_batches: true  # Allow single-class batches (return 0 loss)
 
+# Silhouette score (computed on validation embeddings each epoch)
+silhouette_max_samples: 20000  # Max samples to use (subsampled for speed)
+
 # Optimizer
 optimizer:
   _target_: torch.optim.AdamW

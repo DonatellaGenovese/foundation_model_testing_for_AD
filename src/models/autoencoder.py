@@ -72,14 +72,14 @@ class SimpleAutoencoder(nn.Module):
             current_dim = next_dim
         
         #construct the encoder Layers
-        for h in hidden_dims:
+        for hidden_dim in hidden_dims:
             encoder_layers.extend([
                 nn.Linear(prev_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
                 nn.ReLU(inplace=True),
                 nn.Dropout(dropout),
             ])
-            prev_dim = h
+            prev_dim = hidden_dim
         
         # Bottleneck
         encoder_layers.append(nn.Linear(prev_dim, bottleneck_dim))
@@ -232,7 +232,7 @@ class AutoencoderLitModule(LightningModule):
         
         # Separate normal vs anomaly
         normal_mask = torch.isin(labels, torch.tensor(self.hparams.normal_classes_labels, device=labels.device))
-        anomaly_classes = self.hparams.anomaly_class_labels or []
+        anomaly_classes = self.hparams.anomaly_classes_labels or []
         anomaly_mask = torch.isin(
             labels,
             torch.tensor(anomaly_classes, device=labels.device)
@@ -248,8 +248,9 @@ class AutoencoderLitModule(LightningModule):
             self.val_loss_anomaly(anomaly_errors.mean())
             self.val_errors_anomaly.extend(anomaly_errors.cpu().numpy().tolist())
         
-        # Store labels for test statistics
-        self.val_labels.extend(labels.detach().cpu().numpy().tolist())
+        # Store labels only for tracked samples (normal or anomaly) to stay aligned with errors lists
+        tracked_mask = normal_mask | anomaly_mask
+        self.val_labels.extend(labels[tracked_mask].detach().cpu().numpy().tolist())
     
     def on_validation_epoch_end(self):
         # Log average errors
@@ -302,7 +303,7 @@ class AutoencoderLitModule(LightningModule):
             # Mark normal vs anomaly
             if cls in self.hparams.normal_classes_labels:
                 marker = "(NORMAL - trained)"
-            elif self.hparams.anomaly_class_labels and cls in self.hparams.anomaly_class_labels:
+            elif self.hparams.anomaly_classes_labels and cls in self.hparams.anomaly_classes_labels:
                 marker = "(ANOMALY - unseen)"
             else:
                 marker = ""

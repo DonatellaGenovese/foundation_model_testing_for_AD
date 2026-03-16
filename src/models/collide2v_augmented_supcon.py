@@ -447,8 +447,7 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         if use_classification_head:
             self.train_classification_loss = MeanMetric()
             self.val_classification_loss = MeanMetric()
-            self.train_acc = Accuracy(task="multiclass", num_classes=6)  # Updated in setup()
-            self.val_acc = Accuracy(task="multiclass", num_classes=6)
+            # train_acc / val_acc are created in _build_model_components with the correct num_classes
             self.val_acc_best = MaxMetric()
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:

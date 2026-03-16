@@ -10,7 +10,7 @@ defaults:
 mode: "embedding"
 
 # Encoder checkpoint for embedding extraction
-ckpt_path: "/leonardo/home/userexternal/dgenoves/foundation_model_testing_for_AD/logs/train/runs/2026-03-04_16-03-01/checkpoints/epoch_022.ckpt"
+ckpt_path: "/leonardo/home/userexternal/dgenoves/foundation_model_testing_for_AD/logs/train/runs/2026-03-11_15-40-26/checkpoints/epoch_001.ckpt"
 
 # Model class (update this based on your checkpoint)
 model_class: "src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule"
@@ -19,7 +19,8 @@ model_class: "src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule
 embedding_output_dir: "${paths.output_dir}/embeddings"
 
 # Use projection head embeddings (set to false for encoder embeddings)
-use_projections: true
+# False: use encoder representation h (recommended for downstream tasks per SimCLR/SupCon papers)
+use_projections: false
 
 # Tags
 tags: ["anomaly_detection", "qcd_vs_higgs", "embeddings", "pretrained_encoder"]
@@ -28,7 +29,7 @@ tags: ["anomaly_detection", "qcd_vs_higgs", "embeddings", "pretrained_encoder"]
 normal_classes: [0]  # QCD_inclusive
 
 # Anomaly classes (test these as anomalies)
-anomaly_classes: [15, 17]  # VBFHbb, ggHtautau
+anomaly_classes: [15, 16, 17]  # VBFHbb, HH_4b, ggHtautau
 
 # Data configuration for anomaly detection
 data:
@@ -53,6 +54,7 @@ data:
     - "Minbias_Soft_QCD"
     - "Upsilon_to_Leptons"
     - "VBFHbb"
+    - "HH_4b"
     - "ggHtautau"
   
   datasets_config:
@@ -102,9 +104,9 @@ data:
       count: false
 
 # Autoencoder hyperparameters (for embeddings)
-# Input will be projection_dim=128 from encoder+projection head
+# Input will be d_model=512 from encoder (pre-projection head)
 model:
-  compression: 4  # Compression ratio: 128 / 4 = 32 bottleneck
+  compression: 4  # Compression ratio: 512 / 4 = 128 bottleneck
   depth: 1  # Simpler for embeddings: input → hidden → bottleneck
   dropout: 0.2  # Higher dropout for better regularization
   lr: 0.001
@@ -112,7 +114,7 @@ model:
 
 # Trainer
 trainer:
-  max_epochs: 100  # Can train longer on embeddings
+  max_epochs: 50  # Can train longer on embeddings
   gradient_clip_val: 1.0
 
 # Preprocessing

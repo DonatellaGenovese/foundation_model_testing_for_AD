@@ -178,19 +178,19 @@ def main(cfg: DictConfig):
     log.info("Creating autoencoder...")
     ae_model = AutoencoderLitModule(
         input_dim=input_dim,
-        bottleneck_dim=cfg.model.bottleneck_dim,
-        hidden_dims=cfg.model.hidden_dims,
+        compression=cfg.model.compression,
+        depth=cfg.model.depth,
         dropout=cfg.model.dropout,
         lr=cfg.model.lr,
         weight_decay=cfg.model.weight_decay,
-        normal_classes=cfg.normal_classes,
-        anomaly_classes=cfg.get("anomaly_classes", None),
+        normal_classes_labels=cfg.normal_classes,
+        anomaly_classes_labels=cfg.get("anomaly_classes", None),
     )
-    
+
     log.info(f"Autoencoder architecture:")
     log.info(f"  Input dim: {input_dim}")
-    log.info(f"  Bottleneck dim: {cfg.model.bottleneck_dim}")
-    log.info(f"  Hidden dims: {cfg.model.hidden_dims}")
+    log.info(f"  Bottleneck dim: {input_dim // cfg.model.compression}")
+    log.info(f"  Depth: {cfg.model.depth}")
     log.info(f"  Training on normal classes: {cfg.normal_classes}")
     
     # Callbacks

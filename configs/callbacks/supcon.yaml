@@ -18,6 +18,6 @@ model_checkpoint:
   
 early_stopping:
   monitor: "val/con_loss"
-  patience: 10
+  patience: 25  # > scheduler patience (10) to allow recovery after LR reduction
   mode: "min"
   min_delta: 0.0001

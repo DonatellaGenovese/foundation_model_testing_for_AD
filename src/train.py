@@ -187,10 +187,9 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
             
-            # Ensure model is in eval mode with no gradients
+            # Ensure model is in eval mode
             model.eval()
-            torch.set_grad_enabled(False)
-            
+
             # Move model back to device to ensure clean device state
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model = model.to(device)
@@ -214,12 +213,12 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             test_features, test_labels = test_batch
             
             np.savez(
-                debug_dir / "train_path_test_batch.npz",
+                debug_dir / "train_path_test_batch_before.npz",
                 features=test_features.cpu().numpy(),
                 labels=test_labels.cpu().numpy()
             )
             log.info(f"Saved first test batch: {test_features.shape}, labels: {test_labels[:20]}")
-            
+
             # 2. Save datamodule metadata
             datamodule_info = {
                 'num_classes': datamodule.num_classes,
@@ -229,7 +228,7 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
                 'source': 'train.py',
                 'datamodule_id': id(datamodule),
             }
-            
+
             # Save test file order if available
             if hasattr(datamodule, 'teststream') and hasattr(datamodule.teststream, 'all_files'):
                 test_files = datamodule.teststream.all_files
@@ -238,9 +237,9 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
                 datamodule_info['last_5_files'] = [str(f) for f in test_files[-5:]]
                 log.info(f"Test dataset has {len(test_files)} files")
                 log.info(f"First 5 files: {test_files[:5]}")
-            
+
             import json
-            with open(debug_dir / "train_path_datamodule_info.json", 'w') as f:
+            with open(debug_dir / "train_path_datamodule_info_before.json", 'w') as f:
                 json.dump(datamodule_info, f, indent=2, default=str)
             
             log.info(f"Saved datamodule info: {datamodule_info}")
@@ -263,7 +262,9 @@ def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             log.info("Probe evaluation completed successfully!")
             
         except Exception as e:
-            log.error(f"Probe evaluation failed: {e}")
+            log.error("Probe evaluation failed:", exc_info=True)  # full traceback
+            if cfg.get("optimized_metric"):
+                raise  # let Optuna mark this trial as failed with a real exception
             log.warning("Continuing without probe evaluation...")
     else:
         log.info("\nSkipping probe evaluation (eval_after_training=False)")

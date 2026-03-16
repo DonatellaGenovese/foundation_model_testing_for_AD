@@ -4,7 +4,8 @@
 # python src/train.py experiment=vanillasupcon_6class_pretrain paths=fm_testing_4090 data=collide2v_miniA6000
 
 defaults:
-  - override /data: collide2v_mini4090 #change wrt the data you want 
+  - override /data: collide2v_minicineca
+  - override /paths: fm_testing_cineca
   - override /callbacks: supcon
   - override /trainer: gpu
   - override /logger: mlflow

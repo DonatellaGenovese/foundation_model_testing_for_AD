@@ -5,9 +5,11 @@
 
 defaults:
   - override /data: collide2v_minicineca
+  - override /paths: fm_testing_cineca
   - override /model: augmented_supcon
   - override /callbacks: supcon
   - override /trainer: gpu
+  - override /logger: mlflow
 
 tags: ["collide2v", "augmented_supcon", "15class", "masking"]
 
@@ -92,7 +94,7 @@ model:
   d_model: 512
   n_heads: 8
   num_layers: 4
-  d_ff: 256
+  d_ff: 2048
   dropout: 0
   compile: false
   
@@ -136,40 +138,41 @@ trainer:
 
 callbacks:
   model_checkpoint:
-    monitor: "val/con_loss"  # Monitor contrastive loss
-    mode: "min"
+    monitor: "val/silhouette"  # Best embedding cluster quality
+    mode: "max"
     save_top_k: 1
-    save_last: false
+    save_last: true
     filename: "epoch_{epoch:03d}"
-  
+
   early_stopping:
-    monitor: "val/con_loss"
-    patience: 10
+    monitor: "val/con_loss"   # Trend-only signal: stop if truly stuck
+    patience: 20              # High patience — SupCon needs many epochs to converge
     mode: "min"
+
+preprocess:
+  enabled: true
 
 logger:
   mlflow:
     experiment_name: "augmented_supcon"
     run_name: "aug_supcon_15class"
 
-eval_after_training: true  # Enable automatic probe evaluation
+eval_after_training: true
 
 eval:
   linear_probe:
     max_epochs: 15
     lr: 0.001
     weight_decay: 0.0
-  
+
   knn_probe:
-    # Disable KNN during optimization to save time
     k_values: []
     metric: 'cosine'
-  
-  # UMAP visualization settings
+
   save_visualizations: true
-  max_visualization_samples: 30000
+  max_visualization_samples: 10000
   umap_n_neighbors: 15
   umap_min_dist: 0.1
   umap_metric: 'cosine'
-  
+
   output_dir: ${paths.output_dir}/probe_evaluation

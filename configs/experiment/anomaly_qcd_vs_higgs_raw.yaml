@@ -16,7 +16,7 @@ tags: ["anomaly_detection", "qcd_vs_higgs", "raw_features", "baseline"]
 normal_classes: [0]  # QCD_inclusive
 
 # Anomaly classes (test these as anomalies)
-anomaly_classes: [15, 17]  # VBFHbb, ggHtautau
+anomaly_classes: [15, 16, 17]  # VBFHbb, HH_4b, ggHtautau
 
 # Data configuration for anomaly detection
 data:
@@ -41,6 +41,7 @@ data:
     - "Minbias_Soft_QCD"
     - "Upsilon_to_Leptons"
     - "VBFHbb"
+    - "HH_4b"
     - "ggHtautau"
   datasets_config:
     jets:

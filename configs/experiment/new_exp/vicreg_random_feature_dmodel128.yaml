@@ -1,0 +1,21 @@
+# @package _global_
+# VICReg (random masking, feature-level, layers=4, accumulate=8) — d_model=128
+# Same production architecture as vicreg_physics_dmodel128, only the
+# augmentation differs (physics -> random/feature-level masking).
+defaults:
+  - backbone/backbone_vicreg
+  - new_exp/_final_vicreg
+  - _self_
+
+tags: ["new_exp", "vicreg", "random_feature", "dmodel128", "cern"]
+
+model:
+  d_model: 128
+  projection_dim: 64   # d/2 (paper value)
+  augmentation_type: "random"
+  mask_full_particle: false
+  mask_probability: 0.3
+
+logger:
+  mlflow:
+    run_name: "vicreg_random_feature_dmodel128"

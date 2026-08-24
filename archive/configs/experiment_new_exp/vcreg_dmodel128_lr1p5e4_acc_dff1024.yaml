@@ -1,0 +1,18 @@
+# @package _global_
+# VCReg d128 pilot test: same as lr1p5e4_acc but d_ff=1024 (OLD width)
+# Used to check if seed 137 HH4b TPR recovers with wider FFN.
+defaults:
+  - ablation/training/backbone_vcreg
+  - new_exp/_final_vcreg
+  - new_exp/_vcreg_lr1p5e4_acc
+  - _self_
+
+tags: ["new_exp", "vcreg", "dmodel128", "lr1p5e4", "ckpt_acc", "dff1024", "cern"]
+
+model:
+  d_model: 128
+  d_ff: 1024
+
+logger:
+  mlflow:
+    run_name: "vcreg_dmodel128_lr1p5e4_acc_dff1024"

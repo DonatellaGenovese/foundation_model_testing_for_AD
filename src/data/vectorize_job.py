@@ -26,8 +26,17 @@ args, _ = parser.parse_known_args()
 # Make manifest path absolute now (before Hydra may change cwd)
 args.manifest_path = os.path.abspath(args.manifest_path)
 
-# Prevent Hydra from seeing the CLI arguments
-sys.argv = [sys.argv[0]]
+# Remove --manifest-path from sys.argv so Hydra doesn't see it,
+# but keep any remaining args (e.g. experiment=... overrides).
+filtered = [sys.argv[0]]
+i = 1
+while i < len(sys.argv):
+    if sys.argv[i] == "--manifest-path":
+        i += 2  # skip flag and its value
+    else:
+        filtered.append(sys.argv[i])
+        i += 1
+sys.argv = filtered
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="vectorize_preprocess.yaml")
 def main(cfg: DictConfig):
@@ -51,6 +60,10 @@ def main(cfg: DictConfig):
         split_counts=data_cfg.train_val_test_split_per_class,
         split_manifest=split_manifest,
         parallel_processing=True,
+        # Read from the config rather than left at the default, so a batch
+        # vectorisation can be run with the empty-event filter off — otherwise the
+        # flag would only be reachable through the datamodule's own path.
+        drop_empty_events=data_cfg.get("drop_empty_events", True),
     )
 
 if __name__ == "__main__":

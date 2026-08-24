@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - ablation/training/backbone_vcreg
+  - override /paths: ablation_nlayers_cern
+  - _self_
+
+tags: ["ablation", "nlayers", "vcreg", "d128", "nlayers_6"]
+
+model:
+  num_layers: 6
+
+logger:
+  mlflow:
+    experiment_name: "ablation_nlayers"
+    run_name: "vcreg_nlayers_6"

@@ -1,0 +1,45 @@
+_target_: src.models.collide2v_vicreg.COLLIDE2VVICRegLitModule
+
+# Encoder (TinyTransformer)
+d_model: 512
+n_heads: 4
+num_layers: 4
+d_ff: 2048
+dropout: 0.1
+
+# Projection head (discarded after training)
+projection_dim: 128
+hidden_projection_dim: 256
+
+# VICReg loss weights (paper defaults: inv=25, var=25, cov=1)
+inv_weight: 25.0
+var_weight: 25.0
+cov_weight: 1.0
+
+# Augmentation
+mask_probability: 0.2
+mask_full_particle: false
+mask_noise_std: 0.0
+
+# Classification head (monitoring only — not used in VICReg loss)
+use_classification_head: true
+classification_weight: 0.1
+
+# Silhouette score (computed on validation embeddings each epoch)
+silhouette_max_samples: 20000
+
+# Compile model (PyTorch 2.0+)
+compile: false
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 1.5e-4
+  weight_decay: 5e-4
+  eps: 1e-08
+  betas: [0.9, 0.999]
+
+scheduler: null
+
+# Linear LR warmup over the first N epochs (0 = disabled, default)
+warmup_epochs: 0

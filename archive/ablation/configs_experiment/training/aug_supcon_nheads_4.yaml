@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - ablation/training/backbone_aug_supcon
+  - override /paths: ablation_nheads_cern
+  - _self_
+
+tags: ["ablation", "nheads", "aug_supcon", "d128", "nheads_4"]
+
+model:
+  n_heads: 4
+
+logger:
+  mlflow:
+    experiment_name: "ablation_nheads"
+    run_name: "aug_supcon_nheads_4"

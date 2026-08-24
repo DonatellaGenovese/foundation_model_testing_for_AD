@@ -1,0 +1,12 @@
+# @package _global_
+# VICReg loss ablation — inv_weight=0
+defaults:
+  - ablation/loss/backbone_vicreg_physics
+  - _self_
+
+tags: ["ablation", "loss", "vicreg", "inv0"]
+model:
+  inv_weight: 0.0
+logger:
+  mlflow:
+    run_name: "vicreg_inv0"

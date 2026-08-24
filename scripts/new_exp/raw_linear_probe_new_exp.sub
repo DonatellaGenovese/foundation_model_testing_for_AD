@@ -1,0 +1,32 @@
+# ================================
+# Condor: raw linear probe (lower-bound baseline) — new_exp, 5 seeds
+# Trains nn.Linear(340, 12) on the FILTERED dataset, no encoder.
+# Results saved under /eos/.../anomaly_pipeline/new_exp/raw_linear_probe/
+#
+# Usage:
+#   condor_submit scripts/new_exp/raw_linear_probe_new_exp.sub
+# ================================
+
+executable = scripts/new_exp/wrapper_raw_linear_probe_new_exp.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/new_exp/raw_linear_probe
+output  = $(log_dir)/raw_linear_probe_$(ClusterId).out
+error   = $(log_dir)/raw_linear_probe_$(ClusterId).err
+log     = $(log_dir)/raw_linear_probe_$(ClusterId).log
+
+stream_output = True
+stream_error  = True
+
+run_as_owner = True
++JobFlavour  = "tomorrow"
+getenv       = True
+request_cpus = 8
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    SEEDS='7 42 137 1337 31337' \
+    OUTPUT_DIR=/eos/user/d/dgenoves/anomaly_pipeline/new_exp/raw_linear_probe"
+
+queue

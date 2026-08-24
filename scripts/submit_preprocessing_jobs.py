@@ -17,7 +17,9 @@ from math import ceil
 from pathlib import Path
 from omegaconf import DictConfig, OmegaConf
 
-from src.preprocessing.preprocess import PreprocessingPipeline
+# Lazy import — PreprocessingPipeline needs torch which is only in the container.
+# Imported inside main() only when norm_stats.json is missing (fit step needed).
+PreprocessingPipeline = None
 
 # -----------------------------------------------------------------------------
 # CONFIG
@@ -69,13 +71,14 @@ def main(cfg: DictConfig):
 
     if not stats_path.exists():
         print("ℹ️ norm_stats.json not found, will fit normalization stats...")
+        from src.preprocessing.preprocess import PreprocessingPipeline as _PP
         # Force mode = fit_only without touching config files
         pre_cfg_local = OmegaConf.to_container(pre_cfg, resolve=True)
         pre_cfg_local["mode"] = "fit_only"
         pre_cfg_local["enabled"] = True
         pre_cfg_local = OmegaConf.create(pre_cfg_local)
 
-        pipeline = PreprocessingPipeline(
+        pipeline = _PP(
             paths=paths,
             preprocess_cfg=pre_cfg_local,
             process_to_folder=process_to_folder,
@@ -123,7 +126,7 @@ def main(cfg: DictConfig):
         start = i * MAX_FILES_PER_JOB
         end = start + MAX_FILES_PER_JOB
         chunk = entries[start:end]
-        submit_job(i, chunk)
+        submit_job(i, chunk, paths, OmegaConf.to_container(pre_cfg, resolve=True))
 
     print("\n✅ All preprocessing jobs submitted.")
 
@@ -131,9 +134,12 @@ def main(cfg: DictConfig):
 # -----------------------------------------------------------------------------
 # FUNCTION TO SUBMIT A SINGLE JOB
 # -----------------------------------------------------------------------------
-def submit_job(job_idx, chunk):
+def submit_job(job_idx, chunk, paths, pre_cfg_dict):
     # Build submanifest structure
-    submanifest = {}
+    submanifest = {
+        "_paths": paths,
+        "_preprocess_cfg": pre_cfg_dict,
+    }
     for folder, split, fname in chunk:
         if folder not in submanifest:
             submanifest[folder] = {"train": [], "val": [], "test": []}
@@ -157,8 +163,11 @@ output = {log_out}
 error  = {log_err}
 log    = {log_log}
 
-stream_output = True
-stream_error = True
+# No stream_output/stream_error: the CERN schedd refuses the whole submission
+# ("stream_out and stream_err are no longer supported ... Failed to commit job
+# submission into the queue"). The rejection happens at commit time, not while the
+# file is parsed, so condor_submit -dry-run accepts it and only a real submit fails.
+# Logs land in the files above once the job ends.
 
 run_as_owner = True
 +JobFlavour = "{JOB_FLAVOUR}"
@@ -173,7 +182,10 @@ queue
     with open(sub_path, "w") as f:
         f.write(submit_content)
 
-    subprocess.run(["condor_submit", str(sub_path)], check=False)
+    # check=True, not False: a rejected submission used to be ignored here, so the
+    # script printed "Submitted job ..." for every chunk and then "All preprocessing
+    # jobs submitted" while the queue stayed empty. Fail on the first refusal.
+    subprocess.run(["condor_submit", str(sub_path)], check=True)
     print(f"🚀 Submitted job {job_idx:04d} ({len(chunk)} files)")
 
 if __name__ == "__main__":

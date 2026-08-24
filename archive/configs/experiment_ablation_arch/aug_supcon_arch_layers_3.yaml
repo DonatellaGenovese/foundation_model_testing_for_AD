@@ -1,0 +1,14 @@
+# @package _global_
+# AUG_SUPCON backbone ablation — d=128, layers=3.
+defaults:
+  - ablation/training/aug_supcon_arch_base
+  - _self_
+
+tags: ["ablation", "backbone", "aug_supcon", "d128", "layers_3"]
+
+model:
+  num_layers: 3
+
+logger:
+  mlflow:
+    run_name: "aug_supcon_arch_layers_3"

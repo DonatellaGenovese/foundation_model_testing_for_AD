@@ -1,0 +1,17 @@
+# @package _global_
+# aug_supcon lr=0.003 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_aug_supcon
+  - override /paths: ablation_lr_cern
+  - _self_
+
+tags: ["ablation", "lr", "aug_supcon", "d128", "lr_3e3"]
+
+model:
+  optimizer:
+    lr: 0.003
+
+logger:
+  mlflow:
+    experiment_name: "ablation_lr"
+    run_name: "aug_supcon_lr_3e3"

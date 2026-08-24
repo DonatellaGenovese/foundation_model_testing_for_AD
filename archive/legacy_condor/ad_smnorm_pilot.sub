@@ -1,0 +1,29 @@
+# ================================
+# Pilot: AD on VCReg d=128 with the SM-only normalisation (smnorm dataset).
+# Output kept separate from ad_results/ so the two can be compared.
+#   condor_submit src/ad_smnorm_pilot.sub
+# ================================
+executable = src/wrapper_encoder_seeds_anomaly.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/new_exp
+output  = $(log_dir)/ad_smnorm_pilot_vcreg_d128_$(ClusterId).out
+error   = $(log_dir)/ad_smnorm_pilot_vcreg_d128_$(ClusterId).err
+log     = $(log_dir)/ad_smnorm_pilot_vcreg_d128_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_gpus   = 1
+Requirements   = (TARGET.GPUs_GlobalMemoryMb >= 8000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    PHASE2_EXPERIMENT=new_exp/anomaly_embedding_vcreg_smnorm \
+    ENCODER_SEEDS_DIR=/eos/user/d/dgenoves/anomaly_pipeline/new_exp/vcreg_12class_nosparse_dmodel128_cern \
+    OUTPUT_DIR=/eos/user/d/dgenoves/anomaly_pipeline/new_exp/ad_results_smnorm/vcreg_12class_nosparse_dmodel128_cern \
+    AE_SEED=42 \
+    ENCODER_SEEDS=0,1,2,3,4 \
+    STRATEGIES=mse_normal"
+
+queue

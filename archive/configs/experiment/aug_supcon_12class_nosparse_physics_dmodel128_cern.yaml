@@ -1,0 +1,24 @@
+# @package _global_
+
+# AugSupCon with physics augmentation — d_model=128, 12 classes (no sparse), CERN
+# Ablation: physics augmentation (phi rotation + eta boost + pT smearing)
+# vs random masking in aug_supcon_12class_nosparse_dmodel128_cern.yaml
+#
+# Usage:
+#   python src/train.py experiment=aug_supcon_12class_nosparse_physics_dmodel128_cern
+
+defaults:
+  - aug_supcon_12class_nosparse_dmodel128_cern   # inherit everything from random baseline
+  - _self_
+
+tags: ["collide2v", "augmented_supcon", "12class", "nosparse", "physics_aug", "cern", "dmodel128"]
+
+model:
+  augmentation_type: "physics"
+  eta_sigma: 1.5
+  pt_sigma: 0.1
+
+logger:
+  mlflow:
+    experiment_name: "augmented_supcon"
+    run_name: "aug_supcon_12class_nosparse_physics_dmodel128"

@@ -1,0 +1,8 @@
+# Paths for ablation experiments — redirects logs to dedicated ablation dir on EOS
+# Inherits everything from fm_testing, only overrides log_dir.
+
+defaults:
+  - fm_testing
+  - _self_
+
+log_dir: /eos/user/d/dgenoves/anomaly_pipeline/ablation/logs/

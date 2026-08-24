@@ -1,0 +1,17 @@
+# @package _global_
+# selfsupcon weight_decay=0 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_selfsupcon
+  - override /paths: ablation_wd_cern
+  - _self_
+
+tags: ["ablation", "wd", "selfsupcon", "d128", "wd_0"]
+
+model:
+  optimizer:
+    weight_decay: 0.0
+
+logger:
+  mlflow:
+    experiment_name: "ablation_wd"
+    run_name: "selfsupcon_wd_0"

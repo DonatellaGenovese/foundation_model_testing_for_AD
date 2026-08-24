@@ -1,0 +1,18 @@
+# @package _global_
+# SimCLR (SelfSupCon) — d_model=64, OLD hparams + n_heads=8 fixed (d_ff=512, hidden=64)
+defaults:
+  - backbone/backbone_selfsupcon
+  - new_exp/_final_simclr
+  - _self_
+
+tags: ["new_exp", "simclr", "dmodel64", "cern", "old_hparams"]
+
+model:
+  d_model: 64
+  n_heads: 8
+  d_ff: 512
+  hidden_projection_dim: 64
+
+logger:
+  mlflow:
+    run_name: "simclr_dmodel64"

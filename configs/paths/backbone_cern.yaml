@@ -1,0 +1,13 @@
+# Paths for the shared backbone mixins in configs/experiment/backbone/, and therefore
+# for the SupCon, SimCLR and VICReg production runs that inherit them.
+#
+# Was configs/paths/ablation_training_cern.yaml. Renamed when the ablation configs were
+# archived, but the log_dir is deliberately UNCHANGED: the MLflow runs of the published
+# encoders are already written under ablation/d_model/logs/, and repointing it would
+# orphan them. Only `log_dir` lives here — checkpoints go wherever the submitter sets
+# hydra.run.dir, which is EOS_BASE/<run_dir>/seed_<seed>.
+defaults:
+  - fm_testing
+  - _self_
+
+log_dir: /eos/user/d/dgenoves/anomaly_pipeline/ablation/d_model/logs/

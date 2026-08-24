@@ -4,6 +4,23 @@ train_val_test_split_per_class: [9_960_000, 20_000, 20_000]
 num_workers: 6
 pin_memory: true
 
+# Discard events in which every jet, electron, muon and photon slot has PT == 0,
+# i.e. nothing was reconstructed above the storage thresholds. Applied during
+# vectorisation, so it decides what the .npy shards contain and takes effect only
+# when the vectorised tree is (re)built — the `nosparse` in the dataset labels
+# records that it was on.
+#
+# It is very uneven across processes: about 5% of QCD_HT50toInf, which is generated
+# from HT > 50 GeV and so has a real tail with nothing above threshold, against
+# under 0.5% of everything else. QCD_inclusive is also the class the anomaly
+# autoencoder treats as normal, so this filter defines the soft edge of "normal".
+#
+# Set false to keep them. TinyTransformer applies no padding mask, so an all-zero
+# event yields well-defined tokens from the projection bias and type embedding —
+# there is no NaN risk — but every such event maps to one identical point, and for
+# VICReg that is a block of duplicate samples working against the variance term.
+drop_empty_events: true
+
 preprocess: ${preprocess}
 
 

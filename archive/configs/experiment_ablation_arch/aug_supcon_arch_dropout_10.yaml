@@ -1,0 +1,20 @@
+# @package _global_
+# AUG_SUPCON backbone dropout ablation — d=128, dropout=0.1.
+defaults:
+  - ablation/training/backbone_aug_supcon
+  - override /paths: ablation_backbone_dropout_cern
+  - _self_
+
+tags: ["ablation", "backbone", "dropout", "aug_supcon", "d128", "dropout_10"]
+
+model:
+  d_model: 128
+  n_heads: 8
+  num_layers: 6
+  d_ff: 1024
+  dropout: 0.1
+
+logger:
+  mlflow:
+    experiment_name: "ablation_backbone_dropout"
+    run_name: "aug_supcon_arch_dropout_10"

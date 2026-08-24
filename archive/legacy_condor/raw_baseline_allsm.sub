@@ -1,0 +1,29 @@
+# ================================
+# Condor submission: Raw AE Baseline B — all 12 SM classes, 10 seeds
+#
+# AE trained on raw features of all 12 SM classes (no encoder).
+# Comparison baseline for encoder+AE methods (Baseline B).
+#
+# Results saved to:
+#   /eos/user/d/dgenoves/anomaly_pipeline/strategies_v2/nosparse_dmodel128_seeds/raw_allsm/seed_N/
+#
+# Usage:
+#   condor_submit src/raw_baseline_allsm.sub
+# ================================
+
+executable = src/wrapper_raw_baseline_allsm.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 16
+request_gpus = 1
+
+output = $(log_dir)/raw_baseline_allsm_$(ClusterId).out
+error  = $(log_dir)/raw_baseline_allsm_$(ClusterId).err
+log    = $(log_dir)/raw_baseline_allsm_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4"
+queue

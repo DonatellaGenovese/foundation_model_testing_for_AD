@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - ablation/training/backbone_selfsupcon
+  - override /paths: ablation_dff_cern
+  - _self_
+
+tags: ["ablation", "dff", "selfsupcon", "d128", "dff_512"]
+
+model:
+  d_ff: 512
+
+logger:
+  mlflow:
+    experiment_name: "ablation_dff"
+    run_name: "selfsupcon_dff_512"

@@ -1,0 +1,14 @@
+# @package _global_
+# AUG_SUPCON backbone ablation — d=128, dropout=0.2.
+defaults:
+  - ablation/training/aug_supcon_arch_base
+  - _self_
+
+tags: ["ablation", "backbone", "aug_supcon", "d128", "dropout_20"]
+
+model:
+  dropout: 0.2
+
+logger:
+  mlflow:
+    run_name: "aug_supcon_arch_dropout_20"

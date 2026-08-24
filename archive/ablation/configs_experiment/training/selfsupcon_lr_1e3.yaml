@@ -1,0 +1,17 @@
+# @package _global_
+# selfsupcon lr=0.001 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_selfsupcon
+  - override /paths: ablation_lr_cern
+  - _self_
+
+tags: ["ablation", "lr", "selfsupcon", "d128", "lr_1e3"]
+
+model:
+  optimizer:
+    lr: 0.001
+
+logger:
+  mlflow:
+    experiment_name: "ablation_lr"
+    run_name: "selfsupcon_lr_1e3"

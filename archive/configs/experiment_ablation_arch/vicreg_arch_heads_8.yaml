@@ -1,0 +1,14 @@
+# @package _global_
+# VICREG backbone ablation — d=128, heads=8.
+defaults:
+  - ablation/training/vicreg_arch_base
+  - _self_
+
+tags: ["ablation", "backbone", "vicreg", "d128", "heads_8"]
+
+model:
+  n_heads: 8
+
+logger:
+  mlflow:
+    run_name: "vicreg_arch_heads_8"

@@ -1,0 +1,20 @@
+# @package _global_
+# VICREG backbone architecture ablation — best d=128 configuration.
+defaults:
+  - ablation/training/backbone_vicreg
+  - override /paths: ablation_backbone_cern
+  - _self_
+
+tags: ["ablation", "backbone", "vicreg", "d128", "100k"]
+
+model:
+  d_model: 128
+  n_heads: 4
+  num_layers: 4
+  d_ff: 512
+  dropout: 0.1
+
+logger:
+  mlflow:
+    experiment_name: "ablation_backbone"
+    run_name: "vicreg_arch_base"

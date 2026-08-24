@@ -1,0 +1,119 @@
+# @package _global_
+#
+# AD mocktest — AE trained on QCD only (allsm normalization), 3 Higgs anomalies.
+# Normalization stats computed on all 12 SM classes (v2_nosparse_higgs_allsm_highlevel).
+# AE training uses only QCD_inclusive as normal class — same AD setup as smstats variant
+# but with broader normalization reference.
+
+defaults:
+  - override /data: collide2v_basic
+  - override /paths: xai_mocktest_cern
+
+mode: "embedding"
+
+ckpt_path: null
+
+model_class: "src.models.collide2v_vicreg.COLLIDE2VVCRegLitModule"
+
+embedding_output_dir: "${paths.output_dir}/embeddings"
+
+use_projections: false
+
+tags: ["xai_mocktest", "anomaly_detection", "vcreg", "d128", "higgs", "qcd_only", "allsm"]
+
+normal_classes:  [0]           # QCD_inclusive only
+anomaly_classes: [12, 13, 14]  # VBFHbb, HH_4b, ggHtautau
+
+data:
+  batch_size: 512
+  train_val_test_split_per_class: [200_000, 20_000, 20_000]
+  label: "v2_nosparse_higgs_allsm_highlevel"
+  num_workers: 32
+
+  to_classify:
+    - "QCD_inclusive"       # 0  — normal
+    - "Z_to_vv_jet"         # 1
+    - "Z_to_qq_uds"         # 2
+    - "Z_to_bb"             # 3
+    - "Z_to_cc"             # 4
+    - "W_to_lv"             # 5
+    - "W_to_qq"             # 6
+    - "gamma"               # 7
+    - "QCD_bb"              # 8
+    - "tt_all-hadr"         # 9
+    - "tt_semi-lept"        # 10
+    - "tt_all-lept"         # 11
+    - "VBFHbb"              # 12 — anomaly
+    - "HH_4b"               # 13 — anomaly
+    - "ggHtautau"           # 14 — anomaly
+
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+        - FullReco_JetPuppiAK4_NNeutrals
+      topk: 12
+      count: true
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_Charge
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+        - FullReco_Electron_D0
+        - FullReco_Electron_DZ
+      topk: 8
+      count: false
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_Charge
+        - FullReco_MuonTight_IsolationVarRhoCorr
+        - FullReco_MuonTight_D0
+        - FullReco_MuonTight_DZ
+      topk: 8
+      count: false
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+        - FullReco_PhotonTight_EhadOverEem
+        - FullReco_PhotonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null
+      count: false
+
+# AE hyperparams from Optuna Trial 36 (same as reference run)
+model:
+  compression: 4
+  depth: 4
+  dropout: 0.03473
+  lr: 1.965e-4
+  weight_decay: 3.023e-5
+
+trainer:
+  max_epochs: 50
+  gradient_clip_val: 1.0
+
+preprocess:
+  enabled: true
+
+logger:
+  mlflow:
+    experiment_name: "xai_mocktest"
+    run_name: "vcreg_xai_ad_qcd_allsm"

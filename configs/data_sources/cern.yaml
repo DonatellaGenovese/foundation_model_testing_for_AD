@@ -5,7 +5,7 @@
 data_sources:
   # Event count database
   event_counts_json: "src/utils/nEvents_scan/file_event_counts.json"
-  event_counts_json_fallback: "/afs/.cern.ch/work/p/phploner/foundation_model_testing/src/utils/nEvents_scan/file_event_counts.json"
+  event_counts_json_fallback: "/afs/.cern.ch/work/d/dgenoves/foundation_model_testing/src/utils/nEvents_scan/file_event_counts.json"
 
   # Raw dataset base directory
   raw_data_base_dir: "/eos/project/f/foundational-model-dataset/samples/production_final"

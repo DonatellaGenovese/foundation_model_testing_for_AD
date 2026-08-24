@@ -1,0 +1,13 @@
+# @package _global_
+# AugSupCon loss ablation — temperature=0.10
+defaults:
+  - ablation/loss/backbone_aug_supcon
+  - _self_
+
+tags: ["ablation", "loss", "aug_supcon", "temp010"]
+model:
+  temperature: 0.10
+  base_temperature: 0.10
+logger:
+  mlflow:
+    run_name: "aug_supcon_temp010"

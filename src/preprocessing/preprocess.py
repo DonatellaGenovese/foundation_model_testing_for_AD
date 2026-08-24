@@ -93,7 +93,7 @@ class PreprocessingPipeline:
         if mode not in ("fit_only", "fit_and_apply", "apply_only"):
             raise ValueError("preprocess.mode must be 'fit_only', 'fit_and_apply' or 'apply_only'.")
 
-        if os.path.exists(self.stats_out):
+        if os.path.exists(self.stats_out) and not self.cfg.get("force", False):
             print(f"🟢 Preprocessed data already found with {self.stats_out} — skipping full preprocessing.")
             return
 

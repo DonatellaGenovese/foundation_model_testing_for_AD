@@ -1,0 +1,16 @@
+# @package _global_
+# SelfSupCon dropout=0.2 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_selfsupcon
+  - override /paths: ablation_dropout_cern
+  - _self_
+
+tags: ["ablation", "dropout", "selfsupcon", "d128", "dropout_20"]
+
+model:
+  dropout: 0.2
+
+logger:
+  mlflow:
+    experiment_name: "ablation_dropout"
+    run_name: "selfsupcon_dropout_20"

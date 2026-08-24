@@ -1,0 +1,17 @@
+# @package _global_
+# vicreg d_model=128 ablation — random particle augmentation
+defaults:
+  - ablation/training/backbone_vicreg
+  - _self_
+
+tags: ["ablation", "training", "vicreg", "dmodel128", "100k"]
+model:
+  d_model: 128
+  n_heads: 8
+  d_ff: 512
+  projection_dim: 64
+  hidden_projection_dim: 256
+
+logger:
+  mlflow:
+    run_name: "vicreg_dmodel128"

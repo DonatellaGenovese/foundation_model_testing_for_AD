@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - ablation/training/backbone_vcreg
+  - override /paths: ablation_dff_cern
+  - _self_
+
+tags: ["ablation", "dff", "vcreg", "d128", "dff_1024"]
+
+model:
+  d_ff: 1024
+  optimizer:
+    lr: 1.5e-4
+    weight_decay: 5e-4
+
+logger:
+  mlflow:
+    experiment_name: "ablation_dff"
+    run_name: "vcreg_dff_1024_lr15e4"

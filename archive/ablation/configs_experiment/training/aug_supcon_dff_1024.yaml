@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - ablation/training/backbone_aug_supcon
+  - override /paths: ablation_dff_cern
+  - _self_
+
+tags: ["ablation", "dff", "aug_supcon", "d128", "dff_1024"]
+
+model:
+  d_ff: 1024
+
+logger:
+  mlflow:
+    experiment_name: "ablation_dff"
+    run_name: "aug_supcon_dff_1024"

@@ -1,0 +1,23 @@
+# ================================
+# Probe reproducibility test
+# Runs eval_probes.py on VCReg seed_0 and compares with stored results.
+#
+# Usage:
+#   condor_submit src/probe_repro_test.sub
+# ================================
+
+executable = src/wrapper_probe_repro_test.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/probe_repro_test_$(ClusterId).out
+error   = $(log_dir)/probe_repro_test_$(ClusterId).err
+log     = $(log_dir)/probe_repro_test_$(ClusterId).log
+
+run_as_owner = True
++JobFlavour  = "longlunch"
+getenv       = True
+request_cpus = 8
+request_gpus = 1
+
+queue

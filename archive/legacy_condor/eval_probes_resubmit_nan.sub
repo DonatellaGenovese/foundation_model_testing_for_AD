@@ -1,0 +1,80 @@
+# ================================
+# Condor: resubmit probe eval for experiments that crashed at seed_5 (NaN)
+# and vicreg_d64 (node timeout). Starts from SEED_START=5 so seeds 0-4
+# are skipped (already done). The wrapper now continues past failed seeds.
+# ================================
+
+executable = src/wrapper_eval_probes_seeds.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 16
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+BASE_ENC = /eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds
+BASE_OUT = /eos/user/d/dgenoves/anomaly_pipeline/probe_results
+
+# --- VCReg d32 (crashed at seed_5 with NaN) ---
+EXPERIMENT = vcreg_12class_nosparse_dmodel32_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    EXPERIMENT=$(EXPERIMENT) \
+    ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) \
+    OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) \
+    N_SEEDS=5 SEED_START=5"
+queue
+
+# --- VICReg d32 (crashed at seed_5 with NaN) ---
+EXPERIMENT = vicreg_12class_nosparse_dmodel32_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    EXPERIMENT=$(EXPERIMENT) \
+    ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) \
+    OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) \
+    N_SEEDS=5 SEED_START=5"
+queue
+
+# --- VICReg d64 (node timeout at startup) ---
+EXPERIMENT = vicreg_12class_nosparse_dmodel64_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    EXPERIMENT=$(EXPERIMENT) \
+    ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) \
+    OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) \
+    N_SEEDS=9 SEED_START=1"
+queue
+
+# --- VICReg d128 (crashed at seed_5 with NaN) ---
+EXPERIMENT = vicreg_12class_nosparse_dmodel128_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    EXPERIMENT=$(EXPERIMENT) \
+    ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) \
+    OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) \
+    N_SEEDS=5 SEED_START=5"
+queue
+
+# --- VICReg d256 (crashed at seed_5 with NaN) ---
+EXPERIMENT = vicreg_12class_nosparse_dmodel256_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    EXPERIMENT=$(EXPERIMENT) \
+    ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) \
+    OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) \
+    N_SEEDS=5 SEED_START=5"
+queue

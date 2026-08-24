@@ -8,7 +8,7 @@ set -euo pipefail
 MANIFEST_PATH="$1"
 PROJECT_DIR="$2"
 
-IMAGE=${PROJECT_DIR}/fm_testing.sif
+IMAGE=/eos/user/d/dgenoves/fm_testing.sif
 
 echo "[`date`] Starting preprocessing job on $(hostname)"
 echo "[`date`] Running as $(whoami)"

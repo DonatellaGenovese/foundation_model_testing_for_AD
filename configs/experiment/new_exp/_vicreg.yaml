@@ -1,0 +1,125 @@
+# @package _global_
+#
+# Mixin: VICReg optimisation settings chosen for reproducible convergence.
+# Pulled in by vicreg_dmodel{32,64,128,256} together with
+# backbone/backbone_vicreg, replacing _final_vicreg.yaml.
+#
+# WHY THIS EXISTS. The _final_vicreg campaign did not converge reliably. Measured
+# over the val/vicreg_loss curves of every VICReg run in MLflow (experiment
+# new_exp_vicreg_physics), the physics arm is bimodal: some seeds reach 0.17-0.21
+# around epoch 66-91, others hit their minimum at epoch 0-4 and then rise for
+# twenty epochs until early stopping kills them (d128 seed1337: min 0.62 at epoch
+# 3, last 0.89; d256 seed1337: min 0.53 at epoch 12, last 5.50 — a ten-fold blow
+# up). Downstream that costs real AD performance: within the physics arm, final
+# loss and AD AUC correlate at r = -0.948 over four seeds, so a seed that fails to
+# converge is a seed that detects badly (AUC 0.6175 against 0.7373).
+#
+# THE THREE CHANGES, each aimed at one measured failure.
+#
+# 1. Learning rate 1e-3 -> 3e-4. The backbone's 1e-3 with Adam on a four-layer
+#    transformer and no warmup is the standard divergence recipe, and the failing
+#    runs blow up inside the first ten epochs, which is that signature.
+#
+# 2. ReduceLROnPlateau -> OneCycleLR (warmup + cosine). This is the reproducibility
+#    fix, and the important one. Plateau scheduling makes the learning-rate
+#    trajectory a function of the *noisy validation loss*, so two seeds that differ
+#    only in initialisation get different LR schedules — seed variance is fed
+#    straight back into the optimisation. Cosine is deterministic: every seed sees
+#    the identical schedule. The 5% warmup (about 5 epochs) is what the failing
+#    runs lacked.
+#
+#    OneCycleLR rather than the model's own `warmup_epochs` hook plus
+#    CosineAnnealingLR: that hook writes group["lr"] directly at each epoch start,
+#    while CosineAnnealingLR's recursive get_lr() reads group["lr"] back, so the
+#    two would compose into a schedule neither of them describes. OneCycleLR
+#    carries warmup and annealing in one object, so `warmup_epochs` stays 0 here
+#    deliberately — do not set it.
+#
+# 3. Early stopping effectively off (patience 100). With a cosine schedule the late
+#    epochs are where the model settles, and the good runs above needed epoch
+#    66-99. A patience of 20 on a noisy loss truncated runs at epoch 21-24, which
+#    threw away the part of training that mattered. The schedule must run to the
+#    end for the annealing to mean anything.
+#
+# KEPT DELIBERATELY. accumulate_grad_batches=8, but not for the reason
+# _final_vicreg.yaml gives: its comment claims accumulation "stabilises var/cov",
+# and that is wrong. `_var` and `_cov` in collide2v_vicreg.py reduce over dim=0 of
+# the micro-batch, so accumulation averages gradients while each variance and
+# covariance term is still estimated from 1024 samples, not 8192. It is kept
+# because averaging eight micro-batch gradients genuinely lowers gradient noise,
+# which is worth having here — not because it helps the batch statistics.
+#
+# Augmentation stays `physics`. random_particle already converges on 10/10 runs
+# (loss 0.08-0.15, always at epoch 76-99) but saturates at the worst AD of the
+# three arms, and its own loss-vs-AUC correlation is flat (r = +0.229): pushing its
+# loss lower buys nothing, which is what over-invariance to particle content looks
+# like. physics is the arm with headroom — its best seeds already match
+# random_particle's best — so the gain here comes from making its good seeds the
+# rule rather than the exception.
+
+model:
+  n_heads: 4
+  num_layers: 4
+  augmentation_type: "physics"
+  eta_sigma: 1.5
+  pt_sigma: 0.1
+
+  # Warmup is OneCycleLR's job (see note 2). Leaving this at 0 is required.
+  warmup_epochs: 0
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 3.0e-4
+    weight_decay: 1e-5
+    eps: 1e-08
+    betas: [0.9, 0.999]
+
+  scheduler:
+    _target_: torch.optim.lr_scheduler.OneCycleLR
+    _partial_: true
+    max_lr: 3.0e-4
+    # Stepped once per epoch (configure_optimizers hardcodes interval: "epoch").
+    # One above max_epochs so a trailing step cannot overrun the schedule and
+    # raise; the schedule is otherwise unchanged.
+    total_steps: 101
+    pct_start: 0.05
+    anneal_strategy: "cos"
+    cycle_momentum: false
+    div_factor: 25.0
+    final_div_factor: 1.0e4
+    # Hydra MERGES this block into backbone_vicreg's ReduceLROnPlateau block rather
+    # than replacing it, so overriding _target_ alone leaves that scheduler's keys
+    # behind and they reach OneCycleLR as unexpected kwargs (TypeError on `mode`).
+    # configure_optimizers drops None-valued kwargs — the backbone already relies on
+    # exactly that for its own T_max/eta_min — so null is how a key is removed here.
+    mode: null
+    factor: null
+    patience: null
+    threshold: null
+    threshold_mode: null
+
+data:
+  train_val_test_split_per_class: [1_000_000, 100_000, 100_000]
+  num_workers: 8
+
+trainer:
+  max_epochs: 100
+  precision: 32
+  accumulate_grad_batches: 8
+
+callbacks:
+  model_checkpoint:
+    save_last: false
+    save_top_k: 1
+    monitor: "val/vicreg_loss"
+    mode: "min"
+  early_stopping:
+    monitor: "val/vicreg_loss"
+    patience: 100
+    mode: "min"
+
+logger:
+  mlflow:
+    experiment_name: "new_exp_vicreg"
+    tracking_uri: /eos/user/d/dgenoves/anomaly_pipeline/new_exp/logs/mlflow/mlruns

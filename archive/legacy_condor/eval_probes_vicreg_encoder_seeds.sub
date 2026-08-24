@@ -1,0 +1,48 @@
+# ================================
+# Condor: linear probe eval — VICReg encoder_seeds, all d_models, 10 seeds each
+# Re-run on the CURRENT dataset (previous results archived as *_olddataset_20260729)
+#   condor_submit src/eval_probes_vicreg_encoder_seeds.sub
+# ================================
+
+executable = src/wrapper_eval_probes_seeds.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 16
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+BASE_ENC = /eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds
+BASE_OUT = /eos/user/d/dgenoves/anomaly_pipeline/probe_results
+
+EXPERIMENT = vicreg_12class_nosparse_dmodel32_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 EXPERIMENT=$(EXPERIMENT) ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) N_SEEDS=10 SEED_START=0"
+queue
+
+EXPERIMENT = vicreg_12class_nosparse_dmodel64_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 EXPERIMENT=$(EXPERIMENT) ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) N_SEEDS=10 SEED_START=0"
+queue
+
+EXPERIMENT = vicreg_12class_nosparse_dmodel128_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 EXPERIMENT=$(EXPERIMENT) ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) N_SEEDS=10 SEED_START=0"
+queue
+
+EXPERIMENT = vicreg_12class_nosparse_dmodel256_cern
+output  = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).out
+error   = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).err
+log     = $(log_dir)/eval_probes_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 EXPERIMENT=$(EXPERIMENT) ENCODER_DIR=$(BASE_ENC)/$(EXPERIMENT) OUTPUT_DIR=$(BASE_OUT)/$(EXPERIMENT) N_SEEDS=10 SEED_START=0"
+queue

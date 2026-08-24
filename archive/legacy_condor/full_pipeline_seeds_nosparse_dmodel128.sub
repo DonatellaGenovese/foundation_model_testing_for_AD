@@ -1,0 +1,51 @@
+# ================================
+# Condor submission: AugSupCon 12-class nosparse d_model=128 — 10 seeds
+#
+# Phase 1: AugSupCon encoder (12 classes, excl. DY_to_ll/Minbias/Upsilon, d_model=128)
+# Phase 2: Basic AE + embedding extraction (one AE run per seed)
+#
+# After this completes, run strategies_nosparse_dmodel128_seeds.sub
+# to test multiple AE strategies on each seed's embeddings.
+#
+# Results:
+#   Embeddings  : /eos/.../nosparse_dmodel128_seeds/seed_N/embeddings/
+#   Basic Phase2: /eos/.../nosparse_dmodel128_seeds/seed_N/phase2/
+#   MLflow      : /eos/user/d/dgenoves/anomaly_pipeline/logs/mlflow/mlruns/
+#
+# Usage:
+#   condor_submit src/full_pipeline_seeds_nosparse_dmodel128.sub
+# ================================
+
+executable = src/wrapper_full_pipeline_seeds.sh
+arguments  = $(ClusterId)
+
+N_SEEDS           = 10
+PHASE1_EXPERIMENT = aug_supcon_12class_nosparse_dmodel128_cern
+PHASE2_EXPERIMENT = anomaly_qcd_vs_higgs_embedding_augsupcon_nosparse_dmodel128_cern
+OUTPUT_DIR        = /eos/user/d/dgenoves/anomaly_pipeline/strategies_v2/nosparse_dmodel128_seeds
+PHASE1_CKPT       =
+PHASE1_OVERRIDES  =
+
+# --- Logs ---
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/full_pipeline_seeds_nosparse_dmodel128_$(ClusterId).out
+error   = $(log_dir)/full_pipeline_seeds_nosparse_dmodel128_$(ClusterId).err
+log     = $(log_dir)/full_pipeline_seeds_nosparse_dmodel128_$(ClusterId).log
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 32
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 40000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    PHASE1_EXPERIMENT=$(PHASE1_EXPERIMENT) \
+    PHASE2_EXPERIMENT=$(PHASE2_EXPERIMENT) \
+    OUTPUT_DIR=$(OUTPUT_DIR) \
+    N_SEEDS=$(N_SEEDS) \
+    PHASE1_CKPT=$(PHASE1_CKPT) \
+    PHASE1_OVERRIDES=$(PHASE1_OVERRIDES) \
+    PHASE2_OVERRIDES='model.compression=4 model.depth=4 model.dropout=0.03473 model.lr=1.965e-04 model.weight_decay=3.023e-05'"
+
+queue

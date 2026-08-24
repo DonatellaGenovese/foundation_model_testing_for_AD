@@ -14,7 +14,10 @@ defaults:
 
   # choose experiment config with matching data and preprocessing settings to trained model, set use_trial_config: true to overwrite with
   # the saved config.yaml Hydra config from the exact training run that produced the checkpoint given below
-  - experiment: fm_testing_18class_highlevel
+  # Must name a config that exists. The encoder architecture comes from the
+  # checkpoint's own hparams (load_from_checkpoint), so what this config decides is
+  # the probe protocol — split sizes and paths — not the model.
+  - experiment: new_exp/probe_vcreg_dmodel256
 
   - _self_
 
@@ -32,5 +35,5 @@ tags: ["dev"]
 seed: 42
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/train/multiruns/2026-01-31_16-02-51/10/checkpoints/epoch_047.ckpt
+ckpt_path: null  # set via command line: ckpt_path=/path/to/checkpoint.ckpt
 use_trial_config: true

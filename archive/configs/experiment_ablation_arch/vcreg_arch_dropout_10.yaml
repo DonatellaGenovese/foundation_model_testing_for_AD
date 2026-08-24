@@ -1,0 +1,20 @@
+# @package _global_
+# VCREG backbone dropout ablation — d=128, dropout=0.1.
+defaults:
+  - ablation/training/backbone_vcreg
+  - override /paths: ablation_backbone_dropout_cern
+  - _self_
+
+tags: ["ablation", "backbone", "dropout", "vcreg", "d128", "dropout_10"]
+
+model:
+  d_model: 128
+  n_heads: 8
+  num_layers: 4
+  d_ff: 1024
+  dropout: 0.1
+
+logger:
+  mlflow:
+    experiment_name: "ablation_backbone_dropout"
+    run_name: "vcreg_arch_dropout_10"

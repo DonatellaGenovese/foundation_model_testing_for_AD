@@ -1,0 +1,23 @@
+# @package _global_
+
+# SelfSupCon with physics augmentation — d_model=128, 12 classes (no sparse), CERN
+# Ablation: physics augmentation vs random masking
+#
+# Usage:
+#   python src/train.py experiment=aug_supcon_12class_nosparse_selfsup_physics_dmodel128_cern
+
+defaults:
+  - aug_supcon_12class_nosparse_selfsup_dmodel128_cern
+  - _self_
+
+tags: ["collide2v", "augmented_supcon", "12class", "nosparse", "selfsup", "physics_aug", "cern", "dmodel128"]
+
+model:
+  augmentation_type: "physics"
+  eta_sigma: 1.5
+  pt_sigma: 0.1
+
+logger:
+  mlflow:
+    experiment_name: "augmented_supcon_pretraining"
+    run_name: "aug_supcon_12class_nosparse_selfsup_physics_dmodel128"

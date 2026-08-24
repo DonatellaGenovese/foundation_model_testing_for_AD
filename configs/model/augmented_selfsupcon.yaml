@@ -6,30 +6,30 @@ _target_: src.models.collide2v_augmented_selfsupcon.COLLIDE2VAugmentedSelfSupCon
 # ============================================================
 # ENCODER ARCHITECTURE (TinyTransformer)
 # ============================================================
-d_model: 512
+d_model: 256
 n_heads: 8
-num_layers: 6
-d_ff: 2048
-dropout: 0.08
+num_layers: 8
+d_ff: 1024
+dropout: 0.22575
 
 # ============================================================
 # PROJECTION HEAD (for contrastive learning)
 # ============================================================
 projection_dim: 64
-hidden_projection_dim: 256
+hidden_projection_dim: 512
 
 # ============================================================
 # AUGMENTATION PARAMETERS
 # ============================================================
-mask_probability: 0.2
+mask_probability: 0.4480
 mask_full_particle: false
 num_augmentations: 2
 
 # ============================================================
 # CONTRASTIVE LOSS PARAMETERS
 # ============================================================
-temperature: 0.07
-base_temperature: 0.07
+temperature: 0.12281
+base_temperature: 0.12281
 
 # Self-supervised mode selector (kept for compatibility)
 self_supervised: true
@@ -49,8 +49,8 @@ compile: false
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: true
-  lr: 1.73e-4
-  weight_decay: 0.0167
+  lr: 1.257e-04
+  weight_decay: 3.579e-02
   eps: 1e-09
   betas: [0.9, 0.999]
 

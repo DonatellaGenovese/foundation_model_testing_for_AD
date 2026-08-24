@@ -1,0 +1,34 @@
+# @package _global_
+# Probe-evaluation protocol for the VCReg d_model=128 final run.
+#
+# Deliberately NOT the training data size: the probe trains on 100k/class, the
+# same protocol as the ablation tables, so the resulting AUROC stays directly
+# comparable. Training the probe on the full 1M/class would both inflate the
+# score and OOM (12M x 340 feat x 4B ~ 16 GB tensor, ~33 GB peak).
+# Test is raised to 100k/class: more test events tighten the error bar without
+# shifting the central value.
+#
+# The `model:` block below is INERT for the encoder. eval_probes.py calls
+# load_from_checkpoint, which rebuilds the architecture from the hparams stored in
+# the checkpoint, so the published VCReg (num_layers=4, d_ff=2048) is loaded
+# correctly even though backbone_vcreg declares num_layers=6. The block is kept
+# only so the config composes; what this file really decides is the probe protocol.
+defaults:
+  - backbone/backbone_vcreg
+  - override /paths: new_exp_vcreg_cern
+  - _self_
+
+tags: ["new_exp", "vcreg", "dmodel128", "probe"]
+
+data:
+  train_val_test_split_per_class: [100_000, 10_000, 100_000]
+  num_workers: 10
+
+model:
+  d_model: 128
+  d_ff: 512
+
+logger:
+  mlflow:
+    experiment_name: "new_exp_vcreg_probe"
+    run_name: "vcreg_dmodel128_probe"

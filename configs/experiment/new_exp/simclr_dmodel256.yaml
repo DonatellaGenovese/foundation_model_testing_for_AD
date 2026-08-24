@@ -1,0 +1,18 @@
+# @package _global_
+# SimCLR (SelfSupCon) — d_model=256, OLD arch scale (n_heads=8, d_ff=2048, hidden=256)
+defaults:
+  - backbone/backbone_selfsupcon
+  - new_exp/_final_simclr
+  - _self_
+
+tags: ["new_exp", "simclr", "dmodel256", "cern", "old_hparams"]
+
+model:
+  d_model: 256
+  n_heads: 8
+  d_ff: 2048
+  hidden_projection_dim: 256
+
+logger:
+  mlflow:
+    run_name: "simclr_dmodel256"

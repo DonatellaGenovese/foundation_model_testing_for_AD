@@ -403,12 +403,15 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
         use_classification_head: bool = True,
         classification_weight: float = 0.1,
         allow_single_class_batches: bool = True,
+        augmentation_type: str = "random",   # "random" | "physics"
+        eta_sigma: float = 1.5,
+        pt_sigma: float = 0.1,
         optimizer: Any = None,
         scheduler: Optional[Any] = None,
         compile: bool = False,
     ) -> None:
         super().__init__()
-        
+
         # Save hyperparameters (will be logged and saved in checkpoint)
         self.save_hyperparameters(logger=False)
         
@@ -767,11 +770,26 @@ class COLLIDE2VAugmentedSupConLitModule(LightningModule):
     ) -> None:
         """Build all lazily initialized model components in one place."""
         # 1. Augmentation module
-        self.augmentation = RandomMaskingAugmentation(
-            feature_map=feature_map,
-            mask_probability=self.hparams.mask_probability,
-            mask_full_particle=self.hparams.mask_full_particle,
-        )
+        if self.hparams.augmentation_type == "physics":
+            from src.data.augmentations import PhysicsAugmentation
+            _trainer = getattr(self, "_trainer", None)
+            _dm = getattr(_trainer, "datamodule", None) if _trainer is not None else None
+            if _dm is not None:
+                preproc_dir = _dm.paths["eos_preproc_dir"]
+                self.augmentation = PhysicsAugmentation(
+                    feature_map_path=os.path.join(preproc_dir, "feature_map.json"),
+                    norm_stats_path=os.path.join(preproc_dir, "norm_stats.json"),
+                    eta_sigma=self.hparams.eta_sigma,
+                    pt_sigma=self.hparams.pt_sigma,
+                )
+            else:
+                self.augmentation = nn.Identity()
+        else:
+            self.augmentation = RandomMaskingAugmentation(
+                feature_map=feature_map,
+                mask_probability=self.hparams.mask_probability,
+                mask_full_particle=self.hparams.mask_full_particle,
+            )
 
         # 2. Encoder (TinyTransformer)
         self.encoder = TinyTransformer(

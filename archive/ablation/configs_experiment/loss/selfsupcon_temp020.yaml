@@ -1,0 +1,13 @@
+# @package _global_
+# SelfSupCon loss ablation — temperature=0.20
+defaults:
+  - ablation/loss/backbone_selfsupcon
+  - _self_
+
+tags: ["ablation", "loss", "selfsupcon", "temp020"]
+model:
+  temperature: 0.20
+  base_temperature: 0.20
+logger:
+  mlflow:
+    run_name: "selfsupcon_temp020"

@@ -1,0 +1,15 @@
+# @package _global_
+# SupCon (AugSupCon, physics + λ_cls=0.50) production run — d_model=64
+defaults:
+  - backbone/backbone_aug_supcon
+  - new_exp/_final_supcon
+  - _self_
+
+tags: ["new_exp", "supcon", "physics", "dmodel64", "cern"]
+
+model:
+  d_model: 64
+
+logger:
+  mlflow:
+    run_name: "supcon_dmodel64"

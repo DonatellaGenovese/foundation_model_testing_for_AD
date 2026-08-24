@@ -1,0 +1,49 @@
+# ================================
+# Condor: AE anomaly detection — VCReg encoder_seeds, all d_models, 10 seeds each
+# Re-run on the CURRENT dataset (previous results archived as *_olddataset_20260729)
+#
+#   condor_submit src/encoder_seeds_anomaly_vcreg_all.sub
+# ================================
+
+executable = src/wrapper_encoder_seeds_anomaly.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 8
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+BASE_ENC = /eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds
+BASE_OUT = /eos/user/d/dgenoves/anomaly_pipeline/ad_encoder_seeds
+
+DM = 32
+output  = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).out
+error   = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).err
+log     = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 PHASE2_EXPERIMENT=anomaly_qcd_vs_higgs_embedding_vcreg_nosparse_dmodel$(DM)_cern ENCODER_SEEDS_DIR=$(BASE_ENC)/vcreg_12class_nosparse_dmodel$(DM)_cern OUTPUT_DIR=$(BASE_OUT)/vcreg_nosparse_dmodel$(DM) AE_SEED=42 ENCODER_SEEDS=0,1,2,3,4,5,6,7,8,9"
+queue
+
+DM = 64
+output  = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).out
+error   = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).err
+log     = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 PHASE2_EXPERIMENT=anomaly_qcd_vs_higgs_embedding_vcreg_nosparse_dmodel$(DM)_cern ENCODER_SEEDS_DIR=$(BASE_ENC)/vcreg_12class_nosparse_dmodel$(DM)_cern OUTPUT_DIR=$(BASE_OUT)/vcreg_nosparse_dmodel$(DM) AE_SEED=42 ENCODER_SEEDS=0,1,2,3,4,5,6,7,8,9"
+queue
+
+DM = 128
+output  = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).out
+error   = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).err
+log     = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 PHASE2_EXPERIMENT=anomaly_qcd_vs_higgs_embedding_vcreg_nosparse_dmodel$(DM)_cern ENCODER_SEEDS_DIR=$(BASE_ENC)/vcreg_12class_nosparse_dmodel$(DM)_cern OUTPUT_DIR=$(BASE_OUT)/vcreg_nosparse_dmodel$(DM) AE_SEED=42 ENCODER_SEEDS=0,1,2,3,4,5,6,7,8,9"
+queue
+
+DM = 256
+output  = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).out
+error   = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).err
+log     = $(log_dir)/encoder_seeds_anomaly_vcreg_d$(DM)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 PHASE2_EXPERIMENT=anomaly_qcd_vs_higgs_embedding_vcreg_nosparse_dmodel$(DM)_cern ENCODER_SEEDS_DIR=$(BASE_ENC)/vcreg_12class_nosparse_dmodel$(DM)_cern OUTPUT_DIR=$(BASE_OUT)/vcreg_nosparse_dmodel$(DM) AE_SEED=42 ENCODER_SEEDS=0,1,2,3,4,5,6,7,8,9"
+queue

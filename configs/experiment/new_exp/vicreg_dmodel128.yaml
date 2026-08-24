@@ -1,0 +1,18 @@
+# @package _global_
+# VICReg production run, reproducible-convergence settings — d_model=128.
+# Optimisation (lr 3e-4, OneCycleLR warmup+cosine, early stopping off) lives in
+# new_exp/_vicreg; see that file for what each change fixes and why.
+defaults:
+  - backbone/backbone_vicreg
+  - new_exp/_vicreg
+  - _self_
+
+tags: ["new_exp", "vicreg", "stable", "physics", "dmodel128", "cern"]
+
+model:
+  d_model: 128
+  projection_dim: 64   # d/2 (paper value)
+
+logger:
+  mlflow:
+    run_name: "vicreg_dmodel128"

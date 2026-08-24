@@ -1,0 +1,28 @@
+# ================================
+# Condor: raw AE allSM + QCD-only threshold, ALL strategies (10 seeds)
+# AE trained on all 12 SM classes, ALL strategies run,
+# threshold and AUROC computed on QCD only (--score-classes 0)
+#
+# Usage:
+#   condor_submit src/raw_baseline_allsm_allstrategies_qcdthresh.sub
+# ================================
+
+executable = src/wrapper_raw_baseline_allsm_allstrategies_qcdthresh.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/raw_allsm_allstrategies_qcdthresh_$(ClusterId).out
+error   = $(log_dir)/raw_allsm_allstrategies_qcdthresh_$(ClusterId).err
+log     = $(log_dir)/raw_allsm_allstrategies_qcdthresh_$(ClusterId).log
+
+run_as_owner = True
+
++JobFlavour = "nextweek"
+
+getenv       = True
+request_cpus = 16
+request_gpus = 1
+
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+queue

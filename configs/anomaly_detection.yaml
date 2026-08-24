@@ -24,7 +24,6 @@ ckpt_path: null  # Set this when extracting embeddings or using embeddings mode
 encoder_ckpt: null  # Deprecated, use ckpt_path instead
 # Model class for loading checkpoint (required for embedding extraction)
 # Examples:
-#   - src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule
 #   - src.models.collide2v_augmented_supcon.COLLIDE2VAugmentedSupConLitModule
 #   - src.models.collide2v_tinytransformer.COLLIDE2VTransformerLitModule
 model_class: null

@@ -1,0 +1,34 @@
+# ================================
+# Condor: CE TinyTransformer 12-class nosparse d_model=64 — 10 seeds
+#
+# Results saved to:
+#   /eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds/fm_testing_12class_nosparse_dmodel64_cern/seed_N/
+#
+# Usage:
+#   condor_submit src/encoder_seeds_ce_dmodel64.sub
+# ================================
+
+executable = src/wrapper_encoder_seeds.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 32
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 40000)
+
+N_SEEDS   = 10
+BASE_DIR  = /eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds
+
+EXPERIMENT = fm_testing_12class_nosparse_dmodel64_cern
+output     = $(log_dir)/encoder_seeds_$(EXPERIMENT)_$(ClusterId).out
+error      = $(log_dir)/encoder_seeds_$(EXPERIMENT)_$(ClusterId).err
+log        = $(log_dir)/encoder_seeds_$(EXPERIMENT)_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    EXPERIMENT=$(EXPERIMENT) \
+    N_SEEDS=$(N_SEEDS) \
+    OUTPUT_DIR=$(BASE_DIR)/$(EXPERIMENT)"
+queue

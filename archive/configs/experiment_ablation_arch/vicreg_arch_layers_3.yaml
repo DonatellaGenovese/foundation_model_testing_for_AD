@@ -1,0 +1,14 @@
+# @package _global_
+# VICREG backbone ablation — d=128, layers=3.
+defaults:
+  - ablation/training/vicreg_arch_base
+  - _self_
+
+tags: ["ablation", "backbone", "vicreg", "d128", "layers_3"]
+
+model:
+  num_layers: 3
+
+logger:
+  mlflow:
+    run_name: "vicreg_arch_layers_3"

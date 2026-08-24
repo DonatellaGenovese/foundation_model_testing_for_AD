@@ -1,0 +1,5 @@
+defaults:
+  - fm_testing
+  - _self_
+
+log_dir: /eos/user/d/dgenoves/anomaly_pipeline/ablation/loss/logs/

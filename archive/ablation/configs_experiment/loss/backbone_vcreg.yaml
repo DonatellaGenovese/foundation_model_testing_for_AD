@@ -1,0 +1,73 @@
+# @package _global_
+#
+# VCReg backbone for loss ablation.
+# Same architecture as all other ablation backbones.
+# No augmentation (VCReg uses a single forward pass).
+
+defaults:
+  - backbone_common
+  - override /model: vcreg
+  - override /callbacks: supcon
+  - override /trainer: gpu
+  - _self_
+
+tags: ["ablation", "loss", "vcreg", "dmodel128", "100k"]
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  d_model: 128
+  n_heads: 8
+  num_layers: 6
+  d_ff: 512
+  dropout: 0.1
+  compile: false
+
+  var_weight: 25.0   # overridden by individual ablation configs
+  cov_weight: 1.0    # overridden by individual ablation configs
+
+  optimizer:
+    _target_: torch.optim.Adam
+    _partial_: true
+    lr: 1e-3
+    weight_decay: 1e-5
+    eps: 1e-08
+    betas: [0.9, 0.999]
+
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: min
+    factor: 0.2
+    patience: 10
+    threshold: 0.0001
+    threshold_mode: rel
+    T_max: null
+    eta_min: null
+
+# ── Trainer ───────────────────────────────────────────────────────────────────
+trainer:
+  min_epochs: 1
+  max_epochs: 50
+  max_steps: -1
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: norm
+  accumulate_grad_batches: 1
+  precision: 32
+
+# ── Callbacks ─────────────────────────────────────────────────────────────────
+callbacks:
+  model_checkpoint:
+    monitor: "val/vcreg_loss"
+    mode: "min"
+    save_top_k: 1
+    save_last: true
+    filename: "epoch_{epoch:03d}"
+  early_stopping:
+    monitor: "val/vcreg_loss"
+    patience: 20
+    mode: "min"
+
+# ── Logger ────────────────────────────────────────────────────────────────────
+logger:
+  mlflow:
+    run_name: "ablation_vcreg_loss_backbone"

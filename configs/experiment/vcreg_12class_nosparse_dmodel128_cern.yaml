@@ -1,0 +1,145 @@
+# @package _global_
+#
+# VCReg d_model=128, 12 classes nosparse — CERN version
+# Excludes: DY_to_ll, Minbias_Soft_QCD, Upsilon_to_Leptons
+# Reuses data label v2_12class_nosparse_highlevel.
+
+defaults:
+  - override /data: collide2v_basic
+  - override /paths: fm_testing
+  - override /model: vcreg
+  - override /callbacks: supcon
+  - override /trainer: gpu
+  - override /logger: mlflow
+
+tags: ["collide2v", "vcreg", "12class", "nosparse", "supervised", "dmodel128", "cern"]
+
+seed: 42
+
+data:
+  batch_size: 1024
+  train_val_test_split_per_class: [1_000_000, 100_000, 100_000]
+  label: "v2_12class_nosparse_highlevel"
+  num_workers: 32
+  to_classify:
+    - "QCD_inclusive"
+    - "Z_to_vv_jet"
+    - "Z_to_qq_uds"
+    - "Z_to_bb"
+    - "Z_to_cc"
+    - "W_to_lv"
+    - "W_to_qq"
+    - "gamma"
+    - "QCD_bb"
+    - "tt_all-hadr"
+    - "tt_semi-lept"
+    - "tt_all-lept"
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+        - FullReco_JetPuppiAK4_NNeutrals
+      topk: 12
+      count: true
+
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_Charge
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+        - FullReco_Electron_D0
+        - FullReco_Electron_DZ
+      topk: 8
+      count: false
+
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_Charge
+        - FullReco_MuonTight_IsolationVarRhoCorr
+        - FullReco_MuonTight_D0
+        - FullReco_MuonTight_DZ
+      topk: 8
+      count: false
+
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+        - FullReco_PhotonTight_EhadOverEem
+        - FullReco_PhotonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null
+      count: false
+
+model:
+  d_model: 128
+  n_heads: 8
+  num_layers: 4
+  d_ff: 1024
+  dropout: 0.1
+  compile: false
+
+  var_weight: 25.0
+  cov_weight: 1.0
+
+  optimizer:
+    lr: 1.5e-4
+    weight_decay: 5e-4
+
+trainer:
+  min_epochs: 1
+  max_epochs: 50
+  max_steps: -1
+
+callbacks:
+  model_checkpoint:
+    monitor: "val/acc"
+    mode: "max"
+    save_top_k: 1
+    save_last: true
+    filename: "epoch_{epoch:03d}"
+
+  early_stopping:
+    monitor: "val/ce_loss"
+    patience: 20
+    mode: "min"
+
+preprocess:
+  enabled: true
+
+logger:
+  mlflow:
+    experiment_name: "vcreg"
+    run_name: "vcreg_12class_nosparse_dmodel128"
+
+eval:
+  linear_probe:
+    max_epochs: 15
+    lr: 0.001
+    weight_decay: 0.0
+
+  save_visualizations: true
+  max_visualization_samples: 10000
+  umap_n_neighbors: 15
+  umap_min_dist: 0.1
+  umap_metric: 'cosine'
+
+  output_dir: ${paths.output_dir}/probe_evaluation

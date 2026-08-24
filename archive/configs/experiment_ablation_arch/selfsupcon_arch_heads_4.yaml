@@ -1,0 +1,14 @@
+# @package _global_
+# SELFSUPCON backbone ablation — d=128, heads=4.
+defaults:
+  - ablation/training/selfsupcon_arch_base
+  - _self_
+
+tags: ["ablation", "backbone", "selfsupcon", "d128", "heads_4"]
+
+model:
+  n_heads: 4
+
+logger:
+  mlflow:
+    run_name: "selfsupcon_arch_heads_4"

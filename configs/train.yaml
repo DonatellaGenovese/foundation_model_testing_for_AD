@@ -16,7 +16,10 @@ defaults:
 
   # experiment configs allow for version control of specific hyperparameters
   # e.g. best hyperparameters for given model and datamodule
-  - experiment: fm_testing_18class_highlevel_scheduler
+  # Default must name a config that exists, or `python src/train.py` fails before
+  # doing anything. The CE baseline is the natural default: it is the only stage-2
+  # row whose config lives at this level.
+  - experiment: fm_testing_12class_nosparse_dmodel256_cern
 
   # config for hyperparameter optimization
   - hparams_search: null

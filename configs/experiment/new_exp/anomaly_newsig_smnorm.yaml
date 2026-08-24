@@ -1,0 +1,117 @@
+# @package _global_
+#
+# Additional signal proxies for anomaly detection — SM-only normalisation.
+#
+# Inference only: the encoder and the autoencoder are already trained (the AE on
+# QCD embeddings alone), and the anomaly threshold is the val-calibrated one
+# stored in the AE checkpoint. Nothing here is fitted — these processes are held
+# out in the strongest sense, having played no part in training, normalisation, or
+# threshold calibration.
+#
+# data.label points at a dataset built with the statistics fitted on the 12 SM
+# classes only, the same scale the encoder was trained with. Refitting the
+# normalisation on a sample containing these signals would let them define the
+# feature scale they are then evaluated against.
+#
+# Class indices (order of to_classify):
+#   normal   : [0]           — QCD_inclusive, the AE's trained normality
+#   anomaly  : [1,2,3,4,5]   — VVV, VH, tttt, ttH, HH->bbtautau
+#
+# Splits are small because only the test split is used; train/val exist so the
+# datamodule can be built.
+
+defaults:
+  - override /data: collide2v_basic
+  - override /paths: fm_testing
+
+mode: "embedding"
+
+ckpt_path: null
+
+model_class: "src.models.collide2v_vicreg.COLLIDE2VVCRegLitModule"
+
+embedding_output_dir: "${paths.output_dir}/embeddings"
+
+use_projections: false
+
+tags: ["anomaly_detection", "new_signals", "inference", "cern", "nosparse", "smnorm"]
+
+normal_classes: [0]
+anomaly_classes: [1, 2, 3, 4, 5]
+
+data:
+  batch_size: 512
+  train_val_test_split_per_class: [20_000, 20_000, 20_000]
+  label: "v2_nosparse_newsig_smnorm_highlevel"
+  num_workers: 32
+
+  to_classify:
+    - "QCD_inclusive"     # 0 — normal (AE trained on this)
+    - "VVV"               # 1 — triboson
+    - "VH_incl"           # 2 — V + Higgs
+    - "tttt"              # 3 — four top
+    - "ttH_incl"          # 4 — ttbar + Higgs
+    - "HH_bbtautau"       # 5 — di-Higgs, bb tautau decay
+
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+        - FullReco_JetPuppiAK4_NNeutrals
+      topk: 12
+      count: true
+
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_Charge
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+        - FullReco_Electron_D0
+        - FullReco_Electron_DZ
+      topk: 8
+      count: false
+
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_Charge
+        - FullReco_MuonTight_IsolationVarRhoCorr
+        - FullReco_MuonTight_D0
+        - FullReco_MuonTight_DZ
+      topk: 8
+      count: false
+
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+        - FullReco_PhotonTight_EhadOverEem
+        - FullReco_PhotonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null
+      count: false
+
+preprocess:
+  enabled: false
+
+logger:
+  mlflow:
+    run_name: "anomaly_newsig_smnorm"
+    experiment_name: "anomaly_detection"

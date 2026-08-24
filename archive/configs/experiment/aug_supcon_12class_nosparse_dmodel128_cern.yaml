@@ -1,0 +1,186 @@
+# @package _global_
+
+# Augmented SupCon — d_model=128, 12 classes (no sparse), CERN version
+#
+# Excludes sparse classes (73-83% zero-object events):
+#   DY_to_ll, Minbias_Soft_QCD, Upsilon_to_Leptons
+#
+# Based on aug_supcon_15class_best_cern_dmodel128 with the 3 sparse classes removed.
+# Data label is new (v2_12class_nosparse_highlevel) — fresh preprocessing required.
+#
+# Usage:
+#   python src/train.py experiment=aug_supcon_12class_nosparse_dmodel128_cern
+#
+# As Phase 1 of the full anomaly pipeline:
+#   python src/train_full_anomaly_pipeline.py \
+#       --phase1-experiment aug_supcon_12class_nosparse_dmodel128_cern \
+#       --phase2-experiment anomaly_qcd_vs_higgs_embedding_augsupcon_nosparse_dmodel128_cern \
+#       --output-dir /eos/user/d/dgenoves/anomaly_pipeline/strategies_v2/augsupcon_nosparse_dmodel128
+
+defaults:
+  - override /data: collide2v_basic
+  - override /paths: fm_testing
+  - override /model: augmented_supcon
+  - override /callbacks: supcon
+  - override /trainer: gpu
+  - override /logger: mlflow
+
+tags: ["collide2v", "augmented_supcon", "12class", "nosparse", "masking", "cern", "full_features", "dmodel128"]
+
+seed: 42
+
+data:
+  batch_size: 2048
+  train_val_test_split_per_class: [1_000_000, 100_000, 100_000]
+  label: "v2_12class_nosparse_highlevel"
+  num_workers: 32
+  to_classify:
+    - "QCD_inclusive"
+    - "Z_to_vv_jet"
+    - "Z_to_qq_uds"
+    - "Z_to_bb"
+    - "Z_to_cc"
+    - "W_to_lv"
+    - "W_to_qq"
+    - "gamma"
+    - "QCD_bb"
+    - "tt_all-hadr"
+    - "tt_semi-lept"
+    - "tt_all-lept"
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+        - FullReco_JetPuppiAK4_NNeutrals
+      topk: 12
+      count: true
+
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_Charge
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+        - FullReco_Electron_D0
+        - FullReco_Electron_DZ
+      topk: 8
+      count: false
+
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_Charge
+        - FullReco_MuonTight_IsolationVarRhoCorr
+        - FullReco_MuonTight_D0
+        - FullReco_MuonTight_DZ
+      topk: 8
+      count: false
+
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+        - FullReco_PhotonTight_EhadOverEem
+        - FullReco_PhotonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null
+      count: false
+
+model:
+  # --- Architecture ---
+  d_model: 128
+  n_heads: 8      # head_dim = 16
+  num_layers: 6
+  d_ff: 1024      # 8× d_model
+  dropout: 0.1
+  compile: false
+
+  # --- Projection head ---
+  projection_dim: 32
+  hidden_projection_dim: 128
+
+  # --- Augmentation ---
+  mask_probability: 0.2
+  mask_full_particle: false
+  num_augmentations: 1
+
+  # --- Contrastive loss ---
+  temperature: 0.1
+  use_classification_head: false
+  classification_weight: 0.1
+
+  optimizer:
+    lr: 1.5e-4
+    weight_decay: 1e-2
+
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: min
+    factor: 0.2
+    patience: 10
+    threshold: 0.0001
+    threshold_mode: rel
+    T_max: null
+    eta_min: null
+
+trainer:
+  min_epochs: 1
+  max_epochs: 50
+  max_steps: -1
+
+callbacks:
+  model_checkpoint:
+    monitor: "val/silhouette"
+    mode: "max"
+    save_top_k: 1
+    save_last: true
+    filename: "epoch_{epoch:03d}"
+
+  early_stopping:
+    monitor: "val/con_loss"
+    patience: 20
+    mode: "min"
+
+preprocess:
+  enabled: true
+
+logger:
+  mlflow:
+    experiment_name: "augmented_supcon"
+    run_name: "aug_supcon_12class_nosparse_dmodel128"
+
+
+eval:
+  linear_probe:
+    max_epochs: 15
+    lr: 0.001
+    weight_decay: 0.0
+
+  knn_probe:
+    k_values: []
+    metric: 'cosine'
+
+  save_visualizations: true
+  max_visualization_samples: 10000
+  umap_n_neighbors: 15
+  umap_min_dist: 0.1
+  umap_metric: 'cosine'
+
+  output_dir: ${paths.output_dir}/probe_evaluation

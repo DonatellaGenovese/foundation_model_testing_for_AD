@@ -1,0 +1,18 @@
+# Default paths for the paper XAI pipeline (VCReg d=128, seed 0).
+# Scripts take CLI args; this file is documentation / Condor defaults reference.
+
+run_name: vcreg_d128_seed0
+
+embeddings_dir: /eos/user/d/dgenoves/anomaly_pipeline/gmm_encoder_seeds/vcreg_nosparse_dmodel128/encoder_seed_0/embeddings
+ae_checkpoint: /eos/user/d/dgenoves/anomaly_pipeline/ad_encoder_seeds/vcreg_nosparse_dmodel128/encoder_seed_0/mse_normal/checkpoints/ae-epochepoch=49.ckpt
+encoder_checkpoint: /eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds/vcreg_12class_nosparse_dmodel128_cern/seed_0/checkpoints/epoch_045.ckpt
+vectorized_dir: /eos/user/d/dgenoves/foundation_model_testing_data/v2_nosparse_higgs_allsm_highlevel/vectorized/test
+output_root: /eos/user/d/dgenoves/anomaly_pipeline/xai_paper/vcreg_d128_seed0
+
+signal_label: 13  # HH→4b
+k: 12            # override after 01_select_k
+fpr: 0.10
+min_frac_populated: 0.05
+ari_threshold: 0.8
+k_values: [4, 6, 8, 10, 12]
+cov_type: diag

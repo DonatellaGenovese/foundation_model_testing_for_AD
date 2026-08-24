@@ -92,6 +92,13 @@ def main(cfg: DictConfig):
     n_jobs = ceil(len(entries) / MAX_FILES_PER_JOB)
     print(f"\n🟡 Total files: {len(entries)} → {n_jobs} jobs (≤{MAX_FILES_PER_JOB} files/job)")
 
+    # Extract experiment name from Hydra overrides (passed as experiment=<name>)
+    import sys as _sys
+    experiment_name = next(
+        (a.split("=", 1)[1] for a in _sys.argv[1:] if a.startswith("experiment=")),
+        "fm_testing_18class_highlevel",
+    )
+
     # -----------------------------------------------------------------------------
     # SUBMIT ALL JOBS
     # -----------------------------------------------------------------------------
@@ -99,14 +106,14 @@ def main(cfg: DictConfig):
         start = i * MAX_FILES_PER_JOB
         end = start + MAX_FILES_PER_JOB
         chunk = entries[start:end]
-        submit_job(i, chunk)
+        submit_job(i, chunk, experiment_name)
 
     print(f"\n✅ All {n_jobs} jobs submitted to Condor.")
 
 # -----------------------------------------------------------------------------
 # FUNCTION TO SUBMIT A SINGLE JOB
 # -----------------------------------------------------------------------------
-def submit_job(job_idx, chunk):
+def submit_job(job_idx, chunk, experiment_name="fm_testing_18class_highlevel"):
     # Build submanifest dict
     submanifest = {}
     for folder, split_name, fname in chunk:
@@ -125,15 +132,18 @@ def submit_job(job_idx, chunk):
     # Run the wrapper with the manifest path as argument
     submit_content = f"""\
 executable = {WRAPPER_SCRIPT}
-arguments  = {manifest_path} {PROJECT_DIR}
+arguments  = {manifest_path} {PROJECT_DIR} {experiment_name}
 initialdir = {LOG_DIR}
 
 output = {log_out}
 error  = {log_err}
 log    = {log_log}
 
-stream_output = True
-stream_error = True
+# No stream_output/stream_error: the CERN schedd refuses the whole submission
+# ("stream_out and stream_err are no longer supported ... Failed to commit job
+# submission into the queue"). The rejection happens at commit time, not while the
+# file is parsed, so condor_submit -dry-run accepts it and only a real submit fails.
+# Logs land in the files above once the job ends.
 
 run_as_owner = True
 +JobFlavour = "{JOB_FLAVOUR}"
@@ -148,7 +158,10 @@ queue
     with open(sub_path, "w") as f:
         f.write(submit_content)
 
-    subprocess.run(["condor_submit", str(sub_path)], check=False)
+    # check=True, not False: a rejected submission used to be ignored here, so the
+    # script printed "Submitted job ..." for every chunk and then "All N jobs
+    # submitted" while the queue stayed empty. Fail on the first refusal instead.
+    subprocess.run(["condor_submit", str(sub_path)], check=True)
     print(f"🚀 Submitted job {job_idx:04d} ({len(chunk)} files)")
 
 if __name__ == "__main__":

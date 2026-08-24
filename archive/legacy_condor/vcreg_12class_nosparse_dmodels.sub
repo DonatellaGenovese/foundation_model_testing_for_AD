@@ -1,0 +1,53 @@
+# ================================
+# Condor: VCReg 12class nosparse — encoder training + AE (QCD-only)
+# for d_model=64 and d_model=32 (2 jobs)
+#
+# Each job: 10 encoder seeds × (phase1 VCReg training + phase2 AE QCD-only)
+#
+# Usage:
+#   condor_submit src/vcreg_12class_nosparse_dmodels.sub
+# ================================
+
+executable = src/wrapper_encoder_seeds_vcreg_dmodels.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 32
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 40000)
+
+BASE_ENCODER = /eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds
+BASE_OUTPUT  = /eos/user/d/dgenoves/anomaly_pipeline/strategies_v2
+N_SEEDS      = 10
+
+# --- d_model=64 ---
+PHASE1_EXPERIMENT = vcreg_12class_nosparse_dmodel64_cern
+PHASE2_EXPERIMENT = anomaly_qcd_vs_higgs_embedding_vcreg_nosparse_dmodel64_cern
+output      = $(log_dir)/vcreg_12class_nosparse_dmodel64_$(ClusterId).out
+error       = $(log_dir)/vcreg_12class_nosparse_dmodel64_$(ClusterId).err
+log         = $(log_dir)/vcreg_12class_nosparse_dmodel64_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    PHASE1_EXPERIMENT=$(PHASE1_EXPERIMENT) \
+    PHASE2_EXPERIMENT=$(PHASE2_EXPERIMENT) \
+    ENCODER_SEEDS_DIR=$(BASE_ENCODER)/$(PHASE1_EXPERIMENT) \
+    OUTPUT_DIR=$(BASE_OUTPUT)/$(PHASE1_EXPERIMENT)_seeds \
+    N_SEEDS=$(N_SEEDS)"
+queue
+
+# --- d_model=32 ---
+PHASE1_EXPERIMENT = vcreg_12class_nosparse_dmodel32_cern
+PHASE2_EXPERIMENT = anomaly_qcd_vs_higgs_embedding_vcreg_nosparse_dmodel32_cern
+output      = $(log_dir)/vcreg_12class_nosparse_dmodel32_$(ClusterId).out
+error       = $(log_dir)/vcreg_12class_nosparse_dmodel32_$(ClusterId).err
+log         = $(log_dir)/vcreg_12class_nosparse_dmodel32_$(ClusterId).log
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    PHASE1_EXPERIMENT=$(PHASE1_EXPERIMENT) \
+    PHASE2_EXPERIMENT=$(PHASE2_EXPERIMENT) \
+    ENCODER_SEEDS_DIR=$(BASE_ENCODER)/$(PHASE1_EXPERIMENT) \
+    OUTPUT_DIR=$(BASE_OUTPUT)/$(PHASE1_EXPERIMENT)_seeds \
+    N_SEEDS=$(N_SEEDS)"
+queue

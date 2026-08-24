@@ -2,7 +2,7 @@ Bootstrap: docker
 From: python:3.10-slim
 
 %labels
-    Author phploner
+    Author dgenoves
     Description Foundation Model Testing environment (PyTorch + Lightning + Hydra)
     Version v1.0
 

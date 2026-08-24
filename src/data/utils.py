@@ -141,25 +141,16 @@ def build_vectors_batch(batch: dict, config: dict, fill: float = 0.0) -> np.ndar
 # ============================================================
 
 
-def save_feature_map(config, out_dir: str, vlen: int):
-    """Save a feature_map.json describing flattened layout."""
+def build_feature_map_dict(config: dict) -> dict:
+    """Build the feature_map dict from a datasets_config (OmegaConf or plain dict)."""
+    config_dict = OmegaConf.to_container(config, resolve=True) if hasattr(config, "_metadata") else config
     feature_map = {}
     offset = 0
-
-    config_dict = OmegaConf.to_container(config, resolve=True)
-
     for group_name, cfg in config_dict.items():
         cols = cfg["cols"]
         topk = cfg["topk"]
         count = cfg.get("count", False)
-
-        if topk is None:
-            size = len(cols)
-        else:
-            size = len(cols) * topk
-        if count:
-            size += 1
-
+        size = (len(cols) if topk is None else len(cols) * topk) + (1 if count else 0)
         feature_map[group_name] = {
             "start": int(offset),
             "end": int(offset + size),
@@ -168,12 +159,48 @@ def save_feature_map(config, out_dir: str, vlen: int):
             "count": count,
         }
         offset += size
+    return feature_map
 
+
+def save_feature_map(config, out_dir: str, vlen: int):
+    """Save a feature_map.json describing flattened layout."""
+    feature_map = build_feature_map_dict(config)
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "feature_map.json"), "w") as f:
         json.dump(feature_map, f, indent=2)
-
     print(f"✓ feature_map.json saved → {out_dir}")
+
+
+# ============================================================
+# EMPTY-EVENT FILTER
+# ============================================================
+
+
+def filter_empty_events(X: np.ndarray, feature_map: dict) -> np.ndarray:
+    """Return boolean mask: True = event has ≥1 non-padding particle.
+
+    An event is "empty" if every reconstructed-object slot (jets, electrons,
+    muons, photons) has PT==0.  Only valid on raw vectorized data (before
+    normalization, where padding fill=0 is still reliable).
+
+    Args:
+        X:           (N, vlen) float32 array from vectorized .npy shards
+        feature_map: dict loaded from feature_map.json (keys: start, end,
+                     columns, topk, count)
+
+    Returns:
+        mask (N,) bool — True means keep the event
+    """
+    keep = np.zeros(len(X), dtype=bool)
+    for cfg in feature_map.values():
+        topk = cfg.get("topk")
+        if topk is None:
+            continue  # scalar group (e.g. MET) — no object slots
+        start   = cfg["start"]
+        n_cols  = len(cfg["columns"])
+        pt_cols = [start + i * n_cols for i in range(topk)]
+        keep   |= (X[:, pt_cols] != 0.0).any(axis=1)
+    return keep
 
 
 # ============================================================
@@ -314,6 +341,7 @@ def vectorize_to_local(
     read_batch_size: int = 512,
     split_manifest: dict | None = None,
     parallel_processing: bool = False,
+    drop_empty_events: bool = True,
 ):
     """Vectorize Parquet shards using a deterministic split manifest.
 
@@ -323,11 +351,32 @@ def vectorize_to_local(
 
     Each file in the manifest is converted into .npy shards under:
         eos_vec_dir/{train,val,test}/{class_folder}/...
+
+    `drop_empty_events` (default True, which is what every dataset on disk was
+    built with — hence the `nosparse` in their labels) discards events where every
+    jet, electron, muon and photon slot has PT == 0. Set it False to keep them.
+
+    Which events this touches is very uneven, measured over the vectorization logs:
+    about 5% of QCD_HT50toInf, and under 0.5% of everything else. QCD is generated
+    from HT > 50 GeV, so a real fraction of it has nothing above the storage
+    thresholds — and QCD_inclusive is exactly the class the anomaly-detection AE
+    calls "normal", so the filter defines the softest edge of what "normal" means.
+
+    Keeping them is safe for the encoder but not neutral for the objective.
+    TinyTransformer applies no padding mask (`self.encoder(tokens)` gets no
+    src_key_padding_mask), so an all-zero event yields well-defined tokens from the
+    projection bias plus type embedding — no all-masked softmax, no NaN. It does
+    however map every empty event to one identical point, and for VICReg that is a
+    block of duplicate samples: both augmented views of an empty event are equal,
+    so the invariance term gets a free exact zero, while the variance term is
+    simultaneously pushing those identical inputs apart. Expect it to make VICReg
+    less stable, not more.
     """
 
     os.makedirs(tmp_vec_dir, exist_ok=True)
     os.makedirs(eos_vec_dir, exist_ok=True)
     save_feature_map(config, eos_vec_dir, vlen)
+    _filter_fm = build_feature_map_dict(config)
 
     # -------------------------------------------------------------------------
     # Load or create manifest
@@ -420,6 +469,19 @@ def vectorize_to_local(
 
                 feats_cat = np.concatenate(all_feats, axis=0)
                 labels_cat = np.concatenate(all_labels, axis=0)
+
+                # Filter events with no reconstructed particles (all object PT slots == 0)
+                if drop_empty_events:
+                    mask = filter_empty_events(feats_cat, _filter_fm)
+                    n_removed = int((~mask).sum())
+                    if n_removed > 0:
+                        print(f"  ⚠️  Removed {n_removed}/{len(feats_cat)} empty events ({n_removed/len(feats_cat)*100:.1f}%)")
+                        feats_cat  = feats_cat[mask]
+                        labels_cat = labels_cat[mask]
+                else:
+                    n_empty = int((~filter_empty_events(feats_cat, _filter_fm)).sum())
+                    if n_empty > 0:
+                        print(f"  ⚪ Kept {n_empty}/{len(feats_cat)} empty events ({n_empty/len(feats_cat)*100:.1f}%) — drop_empty_events=False")
 
                 local_x = os.path.join(tmp_split_dir, f"{base}_x.npy")
                 local_y = os.path.join(tmp_split_dir, f"{base}_y.npy")

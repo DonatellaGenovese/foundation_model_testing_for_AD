@@ -1,0 +1,20 @@
+# @package _global_
+# AUG_SUPCON backbone architecture ablation — best d=128 configuration.
+defaults:
+  - ablation/training/backbone_aug_supcon
+  - override /paths: ablation_backbone_cern
+  - _self_
+
+tags: ["ablation", "backbone", "aug_supcon", "d128", "100k"]
+
+model:
+  d_model: 128
+  n_heads: 8
+  num_layers: 6
+  d_ff: 1024
+  dropout: 0.1
+
+logger:
+  mlflow:
+    experiment_name: "ablation_backbone"
+    run_name: "aug_supcon_arch_base"

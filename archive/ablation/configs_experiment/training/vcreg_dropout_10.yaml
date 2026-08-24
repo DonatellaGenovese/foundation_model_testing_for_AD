@@ -1,0 +1,16 @@
+# @package _global_
+# VCReg dropout=0.1 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_vcreg
+  - override /paths: ablation_dropout_cern
+  - _self_
+
+tags: ["ablation", "dropout", "vcreg", "d128", "dropout_10"]
+
+model:
+  dropout: 0.1
+
+logger:
+  mlflow:
+    experiment_name: "ablation_dropout"
+    run_name: "vcreg_dropout_10"

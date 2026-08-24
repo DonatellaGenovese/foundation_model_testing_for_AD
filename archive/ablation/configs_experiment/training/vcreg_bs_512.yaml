@@ -1,0 +1,16 @@
+# @package _global_
+# vcreg batch_size=512 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_vcreg
+  - override /paths: ablation_bs_cern
+  - _self_
+
+tags: ["ablation", "bs", "vcreg", "d128", "bs_512"]
+
+data:
+  batch_size: 512
+
+logger:
+  mlflow:
+    experiment_name: "ablation_bs"
+    run_name: "vcreg_bs_512"

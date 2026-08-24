@@ -10,17 +10,18 @@ from torch.utils.data import IterableDataset
 class LocalVectorDataset(IterableDataset):
     """Stream samples from preprocessed .npy shards on EOS or local storage."""
 
-    def __init__(self, base_dir, per_class_limit=None, shuffle_file_order=True, classnames=None, folder_map=None):
+    def __init__(self, base_dir, per_class_limit=None, shuffle_file_order=True, classnames=None, folder_map=None, seed=None):
         super().__init__()
         self.base_dir = base_dir
         self.per_class_limit = per_class_limit
         self.shuffle = shuffle_file_order
+        self.seed = seed
 
         # Either find all class directories or use provided class names and folder map
         if classnames is None:
             class_dirs = [
                 os.path.join(self.base_dir, folder)
-                for folder in os.listdir(self.base_dir)
+                for folder in sorted(os.listdir(self.base_dir))  # sorted for determinism
                 if os.path.isdir(os.path.join(self.base_dir, folder))
             ]
         else:
@@ -39,7 +40,7 @@ class LocalVectorDataset(IterableDataset):
 
         all_files = []
         for class_dir in self.class_dirs:
-            files_x = [f for f in os.listdir(class_dir) if f.endswith("_x.npy")]
+            files_x = sorted(f for f in os.listdir(class_dir) if f.endswith("_x.npy"))  # sorted for determinism
             for fx in files_x:
                 all_files.append((class_dir, fx))
 
@@ -47,7 +48,7 @@ class LocalVectorDataset(IterableDataset):
 
         # --- Global shuffle across all class shards ---
         if self.shuffle:
-            rng = random.Random()
+            rng = random.Random(seed)  # explicit seed for determinism
             rng.shuffle(self.all_files)
 
     def __iter__(self):
@@ -98,13 +99,15 @@ class LocalVectorDataset(IterableDataset):
 class ShuffleBuffer(IterableDataset):
     """Shuffle streaming samples from an IterableDataset."""
 
-    def __init__(self, dataset, buffer_size=20000):
+    def __init__(self, dataset, buffer_size=20000, seed=None):
         super().__init__()
         self.dataset = dataset
         self.buffer_size = buffer_size
+        self.seed = seed
 
     def __iter__(self):
-        seed = torch.initial_seed() % 2**32
+        # Use explicit seed if provided, otherwise fall back to torch state
+        seed = self.seed if self.seed is not None else torch.initial_seed() % 2**32
         rng = random.Random(seed)
         buf = []
 

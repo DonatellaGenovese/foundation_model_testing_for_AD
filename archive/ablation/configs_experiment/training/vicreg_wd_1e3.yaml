@@ -1,0 +1,17 @@
+# @package _global_
+# vicreg weight_decay=0.001 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_vicreg
+  - override /paths: ablation_wd_cern
+  - _self_
+
+tags: ["ablation", "wd", "vicreg", "d128", "wd_1e3"]
+
+model:
+  optimizer:
+    weight_decay: 0.001
+
+logger:
+  mlflow:
+    experiment_name: "ablation_wd"
+    run_name: "vicreg_wd_1e3"

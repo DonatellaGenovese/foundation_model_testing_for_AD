@@ -1,0 +1,18 @@
+# @package _global_
+# AugSupCon — random masking, feature-level (baseline augmentation)
+# Usage: python src/train.py experiment=ablation/aug_supcon_random_feature seed=42
+
+defaults:
+  - ablation/backbone_aug_supcon
+  - _self_
+
+tags: ["ablation", "augmentation", "aug_supcon", "random", "feature_level"]
+
+model:
+  augmentation_type: "random"
+  mask_full_particle: false
+  mask_probability: 0.3
+
+logger:
+  mlflow:
+    run_name: "ablation_aug_supcon_random_feature"

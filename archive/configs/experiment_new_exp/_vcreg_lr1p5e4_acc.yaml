@@ -1,0 +1,27 @@
+# @package _global_
+#
+# Pilot overrides: closer to old encoder_seeds VCReg training.
+#   - lr=1.5e-4, wd=5e-4
+#   - checkpoint on val/acc (max)
+#   - early stop on val/ce_loss (min), patience 20
+
+model:
+  optimizer:
+    lr: 1.5e-4
+    weight_decay: 5.0e-4
+
+callbacks:
+  model_checkpoint:
+    monitor: "val/acc"
+    mode: "max"
+    save_top_k: 1
+    save_last: false
+    filename: "epoch_{epoch:03d}"
+  early_stopping:
+    monitor: "val/ce_loss"
+    patience: 20
+    mode: "min"
+
+logger:
+  mlflow:
+    experiment_name: "new_exp_vcreg_lr1p5e4_acc"

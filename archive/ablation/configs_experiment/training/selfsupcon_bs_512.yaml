@@ -1,0 +1,16 @@
+# @package _global_
+# selfsupcon batch_size=512 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_selfsupcon
+  - override /paths: ablation_bs_cern
+  - _self_
+
+tags: ["ablation", "bs", "selfsupcon", "d128", "bs_512"]
+
+data:
+  batch_size: 512
+
+logger:
+  mlflow:
+    experiment_name: "ablation_bs"
+    run_name: "selfsupcon_bs_512"

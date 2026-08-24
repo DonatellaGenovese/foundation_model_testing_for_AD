@@ -1,0 +1,45 @@
+# ================================
+# Condor: GMM anomaly detection across VCReg encoder seeds
+#
+# For each of 10 encoder seeds:
+#   1. Extract embeddings from the encoder checkpoint (all 12 SM + 3 BSM classes)
+#   2. Fit GMM on all 12 SM embeddings (grid search over K, cov type)
+#   3. Evaluate AUROC on VBFHbb, HH_4b, ggHtautau
+#      using two anomaly scores: NLL and 1-maxResp
+#      using two background sets: QCD only and all 12 SM classes
+#
+# Encoder checkpoints:
+#   encoder_seeds/vcreg_12class_nosparse_dmodel128_cern/seed_{0..9}/
+# Results:
+#   gmm_encoder_seeds/vcreg_nosparse_dmodel128/
+#
+# Usage:
+#   condor_submit src/gmm_encoder_seeds_vcreg.sub
+# ================================
+
+executable = src/wrapper_gmm_encoder_seeds.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/gmm_encoder_seeds_vcreg_$(ClusterId).out
+error   = $(log_dir)/gmm_encoder_seeds_vcreg_$(ClusterId).err
+log     = $(log_dir)/gmm_encoder_seeds_vcreg_$(ClusterId).log
+
+run_as_owner = True
+
++JobFlavour = "nextweek"
+
+getenv       = True
+request_cpus = 8
+request_gpus = 1
+
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    PHASE2_EXPERIMENT=anomaly_qcd_vs_higgs_embedding_vcreg_nosparse_allsm_dmodel128_cern \
+    ENCODER_SEEDS_DIR=/eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds/vcreg_12class_nosparse_dmodel128_cern \
+    OUTPUT_DIR=/eos/user/d/dgenoves/anomaly_pipeline/gmm_encoder_seeds/vcreg_nosparse_dmodel128 \
+    GMM_SEED=42 \
+    ENCODER_SEEDS=0,1,2,3,4,5,6,7,8,9"
+
+queue

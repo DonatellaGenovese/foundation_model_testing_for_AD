@@ -1,0 +1,31 @@
+# ================================
+# Condor: linear probe evaluation — selfsupcon_d128
+# Runs eval_probes.py on all 10 seeds, saves aggregated_summary.json
+#
+# Usage:
+#   condor_submit src/eval_probes_selfsupcon_d128.sub
+# ================================
+
+executable = src/wrapper_eval_probes_seeds.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/eval_probes_selfsupcon_d128_$(ClusterId).out
+error   = $(log_dir)/eval_probes_selfsupcon_d128_$(ClusterId).err
+log     = $(log_dir)/eval_probes_selfsupcon_d128_$(ClusterId).log
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 16
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    EXPERIMENT=aug_supcon_12class_nosparse_selfsup_dmodel128_cern \
+    ENCODER_DIR=/eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds/aug_supcon_12class_nosparse_selfsup_dmodel128_cern \
+    OUTPUT_DIR=/eos/user/d/dgenoves/anomaly_pipeline/probe_results/selfsupcon_d128 \
+    N_SEEDS=10 \
+    SEED_START=0"
+
+queue

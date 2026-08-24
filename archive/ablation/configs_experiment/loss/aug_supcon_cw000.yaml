@@ -1,0 +1,12 @@
+# @package _global_
+# AugSupCon loss ablation — classification_weight=0.0
+defaults:
+  - ablation/loss/backbone_aug_supcon
+  - _self_
+
+tags: ["ablation", "loss", "aug_supcon", "cw000"]
+model:
+  classification_weight: 0.0
+logger:
+  mlflow:
+    run_name: "aug_supcon_cw000"

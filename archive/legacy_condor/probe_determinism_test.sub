@@ -1,0 +1,29 @@
+# ================================
+# Determinism test: run eval_probes.py twice on the same checkpoint.
+# If probe_results.json in run1/ and run2/ are identical → determinism confirmed.
+#
+# Usage:
+#   condor_submit src/probe_determinism_test.sub
+# ================================
+
+executable = src/wrapper_probe_determinism_test.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/probe_determinism_test_$(ClusterId)_run$(RUN_ID).out
+error   = $(log_dir)/probe_determinism_test_$(ClusterId)_run$(RUN_ID).err
+log     = $(log_dir)/probe_determinism_test_$(ClusterId).log
+
+run_as_owner = True
++JobFlavour  = "longlunch"
+getenv       = True
+request_cpus = 8
+request_gpus = 1
+
+RUN_ID = 1
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 RUN_ID=$(RUN_ID)"
+queue
+
+RUN_ID = 2
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 RUN_ID=$(RUN_ID)"
+queue

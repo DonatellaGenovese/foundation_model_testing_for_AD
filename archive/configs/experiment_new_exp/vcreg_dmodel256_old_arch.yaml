@@ -1,0 +1,21 @@
+# @package _global_
+# Ablation test: d256 with OLD architecture + NEW protocol
+#   OLD arch: num_layers=4, d_ff=2048, n_heads=8
+#   NEW protocol: lr=1.5e-4, wd=5e-4, ckpt val/acc, early stop val/ce_loss
+defaults:
+  - ablation/training/backbone_vcreg
+  - new_exp/_final_vcreg
+  - new_exp/_vcreg_lr1p5e4_acc
+  - _self_
+
+tags: ["new_exp", "vcreg", "dmodel256", "old_arch", "lr1p5e4", "ckpt_acc", "cern"]
+
+model:
+  d_model: 256
+  n_heads: 8
+  num_layers: 4
+  d_ff: 2048
+
+logger:
+  mlflow:
+    run_name: "vcreg_dmodel256_old_arch"

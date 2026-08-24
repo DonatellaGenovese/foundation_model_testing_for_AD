@@ -29,7 +29,6 @@ from omegaconf import DictConfig, OmegaConf
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from src.models.autoencoder import AutoencoderLitModule
-from src.models.collide2v_vanillasupcon import COLLIDE2VVanillaSupConLitModule
 from src.utils import RankedLogger, extras, instantiate_callbacks, instantiate_loggers
 
 log = RankedLogger(__name__, rank_zero_only=True)

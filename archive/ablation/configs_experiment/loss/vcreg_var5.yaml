@@ -1,0 +1,10 @@
+# @package _global_
+# VCReg loss ablation — var_weight=5 (baseline: 25)
+defaults:
+  - ablation/loss/backbone_vcreg
+  - _self_
+
+tags: ["ablation", "loss", "vcreg", "var5"]
+model:
+  var_weight: 5.0
+  cov_weight: 1.0

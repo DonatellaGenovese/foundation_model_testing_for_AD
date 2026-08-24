@@ -1,0 +1,16 @@
+# @package _global_
+# aug_supcon d_model=512 ablation
+defaults:
+  - ablation/training/backbone_aug_supcon
+  - _self_
+
+tags: ["ablation", "training", "aug_supcon", "dmodel512", "100k"]
+model:
+  d_model: 512
+  n_heads: 8
+  d_ff: 2048
+  projection_dim: 256
+  hidden_projection_dim: 1024
+logger:
+  mlflow:
+    run_name: "aug_supcon_dmodel512"

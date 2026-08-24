@@ -1,0 +1,17 @@
+# @package _global_
+# VCReg d128 pilot: ablation arch + old-style lr/wd + ckpt on val/acc
+defaults:
+  - ablation/training/backbone_vcreg
+  - new_exp/_final_vcreg
+  - new_exp/_vcreg_lr1p5e4_acc
+  - _self_
+
+tags: ["new_exp", "vcreg", "dmodel128", "lr1p5e4", "ckpt_acc", "cern"]
+
+model:
+  d_model: 128
+  d_ff: 512
+
+logger:
+  mlflow:
+    run_name: "vcreg_dmodel128_lr1p5e4_acc"

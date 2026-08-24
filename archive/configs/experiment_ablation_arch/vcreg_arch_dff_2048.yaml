@@ -1,0 +1,14 @@
+# @package _global_
+# VCREG backbone ablation — d=128, dff=2048.
+defaults:
+  - ablation/training/vcreg_arch_base
+  - _self_
+
+tags: ["ablation", "backbone", "vcreg", "d128", "dff_2048"]
+
+model:
+  d_ff: 2048
+
+logger:
+  mlflow:
+    run_name: "vcreg_arch_dff_2048"

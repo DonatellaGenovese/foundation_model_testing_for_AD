@@ -1,0 +1,14 @@
+# @package _global_
+# VCREG backbone ablation — d=128, layers=8.
+defaults:
+  - ablation/training/vcreg_arch_base
+  - _self_
+
+tags: ["ablation", "backbone", "vcreg", "d128", "layers_8"]
+
+model:
+  num_layers: 8
+
+logger:
+  mlflow:
+    run_name: "vcreg_arch_layers_8"

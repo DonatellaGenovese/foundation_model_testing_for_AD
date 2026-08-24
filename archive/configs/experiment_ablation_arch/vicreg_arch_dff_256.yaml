@@ -1,0 +1,14 @@
+# @package _global_
+# VICREG backbone ablation — d=128, dff=256.
+defaults:
+  - ablation/training/vicreg_arch_base
+  - _self_
+
+tags: ["ablation", "backbone", "vicreg", "d128", "dff_256"]
+
+model:
+  d_ff: 256
+
+logger:
+  mlflow:
+    run_name: "vicreg_arch_dff_256"

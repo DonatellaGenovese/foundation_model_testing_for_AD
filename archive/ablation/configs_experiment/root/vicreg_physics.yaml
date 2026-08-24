@@ -1,0 +1,18 @@
+# @package _global_
+# VICReg — physics augmentation (phi rotation + eta boost + pT smearing)
+# Usage: python src/train.py experiment=ablation/vicreg_physics seed=42
+
+defaults:
+  - ablation/backbone_vicreg
+  - _self_
+
+tags: ["ablation", "augmentation", "vicreg", "physics"]
+
+model:
+  augmentation_type: "physics"
+  eta_sigma: 1.5
+  pt_sigma: 0.1
+
+logger:
+  mlflow:
+    run_name: "ablation_vicreg_physics"

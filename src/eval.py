@@ -16,6 +16,7 @@ from omegaconf import OmegaConf, DictConfig
 # Allow safe unpickling of functools.partial from trusted checkpoints (else newer Pytorch versions fail to load them)
 torch.serialization.add_safe_globals([functools.partial,
                                       torch.optim.AdamW,torch.optim.lr_scheduler.CosineAnnealingLR, torch.optim.lr_scheduler.ReduceLROnPlateau,
+        torch.optim.lr_scheduler.OneCycleLR,
                                       omegaconf.ListConfig, omegaconf.DictConfig, omegaconf.dictconfig.DictConfig,
                                       omegaconf.nodes.AnyNode, omegaconf.base.Metadata, omegaconf.base.ContainerMetadata,
                                       collections.defaultdict, typing.Any,

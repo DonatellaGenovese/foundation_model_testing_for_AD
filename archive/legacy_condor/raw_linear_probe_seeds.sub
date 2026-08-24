@@ -1,0 +1,28 @@
+# ================================
+# Condor: raw linear probe — 10 seeds (lower bound baseline)
+# Trains nn.Linear(340, 12) directly on raw features, no encoder.
+#
+# Usage:
+#   condor_submit src/raw_linear_probe_seeds.sub
+# ================================
+
+executable = src/wrapper_raw_linear_probe_seeds.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/raw_linear_probe_$(ClusterId).out
+error   = $(log_dir)/raw_linear_probe_$(ClusterId).err
+log     = $(log_dir)/raw_linear_probe_$(ClusterId).log
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 16
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    N_SEEDS=10 \
+    OUTPUT_DIR=/eos/user/d/dgenoves/anomaly_pipeline/raw_linear_probe"
+
+queue

@@ -1,0 +1,28 @@
+# ================================
+# Condor submission: raw AE baseline for nosparse 12-class + Higgs
+#
+# Runs all 5 strategies (mse_qcd, auroc_all_signals, auroc_cls12/13/14)
+# on raw input features (no encoder) for the nosparse dataset.
+#
+# Results saved to:
+#   /eos/user/d/dgenoves/anomaly_pipeline/strategies_v2/nosparse_dmodel128_seeds/raw/
+#
+# Usage:
+#   condor_submit src/raw_baseline_nosparse.sub
+# ================================
+
+executable = src/wrapper_raw_baseline_nosparse.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/raw_baseline_nosparse_$(ClusterId).out
+error   = $(log_dir)/raw_baseline_nosparse_$(ClusterId).err
+log     = $(log_dir)/raw_baseline_nosparse_$(ClusterId).log
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 16
+request_gpus = 1
+
+queue

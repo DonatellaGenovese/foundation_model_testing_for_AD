@@ -1,0 +1,16 @@
+# @package _global_
+# vicreg scheduler=none ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_vicreg
+  - override /paths: ablation_sched_cern
+  - _self_
+
+tags: ["ablation", "sched", "vicreg", "d128", "sched_none"]
+
+model:
+  scheduler: null
+
+logger:
+  mlflow:
+    experiment_name: "ablation_sched"
+    run_name: "vicreg_sched_none"

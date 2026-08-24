@@ -1,0 +1,35 @@
+# ================================
+# Condor: raw AE Case 3 — QCD-only training (new_exp, 5 seeds)
+# Config: anomaly_qcd_vs_higgs_raw_nosparse_cern
+# Data:   v2_nosparse_higgs_smstats_highlevel
+# Output: /eos/.../anomaly_pipeline/new_exp/ad_results/raw/
+#
+# Usage:
+#   condor_submit scripts/new_exp/raw_ae_qcd_new_exp.sub
+# ================================
+
+executable = scripts/new_exp/wrapper_raw_ae_new_exp.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/new_exp/raw_ae
+output  = $(log_dir)/raw_ae_qcd_$(ClusterId).out
+error   = $(log_dir)/raw_ae_qcd_$(ClusterId).err
+log     = $(log_dir)/raw_ae_qcd_$(ClusterId).log
+
+stream_output = True
+stream_error  = True
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 8
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    RAW_EXPERIMENT=anomaly_qcd_vs_higgs_raw_nosparse_cern \
+    OUTPUT_DIR=/eos/user/d/dgenoves/anomaly_pipeline/new_exp/ad_results/raw \
+    SEEDS='7 42 137 1337 31337' \
+    MODEL_TAG=raw_nosparse"
+
+queue

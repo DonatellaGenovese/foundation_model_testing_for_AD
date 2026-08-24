@@ -1,0 +1,17 @@
+# @package _global_
+# VCReg d64: same arch as ablation d64, but pilot-style lr/wd + ckpt on val/acc.
+defaults:
+  - ablation/training/backbone_vcreg
+  - new_exp/_final_vcreg
+  - new_exp/_vcreg_lr1p5e4_acc
+  - _self_
+
+tags: ["new_exp", "vcreg", "dmodel64", "lr1p5e4", "ckpt_acc", "cern"]
+
+model:
+  d_model: 64
+  d_ff: 256
+
+logger:
+  mlflow:
+    run_name: "vcreg_dmodel64_lr1p5e4_acc"

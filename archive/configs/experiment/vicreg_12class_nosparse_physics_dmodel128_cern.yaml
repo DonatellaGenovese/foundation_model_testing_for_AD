@@ -1,0 +1,23 @@
+# @package _global_
+
+# VICReg with physics augmentation — d_model=128, 12 classes (no sparse), CERN
+# Ablation: physics augmentation vs random masking
+#
+# Usage:
+#   python src/train.py experiment=vicreg_12class_nosparse_physics_dmodel128_cern
+
+defaults:
+  - vicreg_12class_nosparse_dmodel128_cern
+  - _self_
+
+tags: ["collide2v", "vicreg", "12class", "nosparse", "physics_aug", "cern", "dmodel128"]
+
+model:
+  augmentation_type: "physics"
+  eta_sigma: 1.5
+  pt_sigma: 0.1
+
+logger:
+  mlflow:
+    experiment_name: "vicreg"
+    run_name: "vicreg_12class_nosparse_physics_dmodel128"

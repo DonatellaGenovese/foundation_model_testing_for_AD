@@ -1,0 +1,39 @@
+# @package _global_
+# VCReg final training run — d_model=32, d_ff = 4*d_model = 128.
+#
+# Architecture/optim from the ablation study (all measured at d_ff = 4*d_model):
+#   n_heads=8, num_layers=6, dropout=0.1, lr=1e-3, wd=1e-5, alpha=25, beta=1.
+# Inherited from backbone_vcreg — do NOT use lr=1.5e-4 / wd=5e-4 (old table),
+# those cost ~0.02-0.12 AUROC.
+#
+# Full dataset: 1M/100k/100k per class (~11.7k steps/epoch at bs=1024).
+# Scheduler/early-stopping patience rescaled: they are counted in epochs, and
+# one epoch is now 10x longer in steps than during the ablations.
+defaults:
+  - ablation/training/backbone_vcreg
+  - override /paths: new_exp_vcreg_cern
+  - _self_
+
+tags: ["new_exp", "vcreg", "dmodel32", "full_dataset"]
+
+data:
+  train_val_test_split_per_class: [1_000_000, 100_000, 100_000]
+  num_workers: 10
+
+model:
+  d_model: 32
+  d_ff: 128
+  scheduler:
+    patience: 2
+
+trainer:
+  max_epochs: 40
+
+callbacks:
+  early_stopping:
+    patience: 5
+
+logger:
+  mlflow:
+    experiment_name: "new_exp_vcreg"
+    run_name: "vcreg_dmodel32"

@@ -5,6 +5,7 @@
 defaults:
   - _self_
   - paths: fm_testing
+  - data_sources: cern
   - data: collide2v_basic
   - preprocess: collide2v
   - model: tinyTransformer
@@ -16,7 +17,7 @@ defaults:
 
   # experiment configs allow for version control of specific hyperparameters
   # e.g. best hyperparameters for given model and datamodule
-  - experiment: fm_testing_18class_highlevel
+  - experiment: fm_testing_12class_nosparse_dmodel256_cern
 
   # config for hyperparameter optimization
   - hparams_search: null

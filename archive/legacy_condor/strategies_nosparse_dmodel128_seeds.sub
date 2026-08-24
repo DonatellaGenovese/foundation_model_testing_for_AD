@@ -1,0 +1,42 @@
+# ================================
+# Condor submission: multi-seed AE strategy comparison
+# AugSupCon 12-class nosparse d_model=128 — 10 seeds × 5 strategies
+#
+# Prerequisite: full_pipeline_seeds_nosparse_dmodel128.sub must have completed.
+# Each seed's embeddings must exist at:
+#   /eos/.../nosparse_dmodel128_seeds/seed_N/embeddings/
+#
+# Strategies tested per seed:
+#   mse_qcd          — pure unsupervised (QCD val MSE)
+#   auroc_all_signals — semi-supervised, all 3 Higgs in val
+#   auroc_cls12       — semi-supervised, VBFHbb only in val
+#   auroc_cls13       — semi-supervised, HH_4b only in val
+#   auroc_cls14       — semi-supervised, ggHtautau only in val
+#
+# Results saved to:
+#   /eos/.../nosparse_dmodel128_seeds/seed_N/strategies/strategies_summary.json
+#
+# Usage:
+#   condor_submit src/strategies_nosparse_dmodel128_seeds.sub
+# ================================
+
+executable = src/wrapper_strategies_nosparse_dmodel128_seeds.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/strategies_nosparse_dmodel128_seeds_$(ClusterId).out
+error   = $(log_dir)/strategies_nosparse_dmodel128_seeds_$(ClusterId).err
+log     = $(log_dir)/strategies_nosparse_dmodel128_seeds_$(ClusterId).log
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 32
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 40000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    BASE_DIR=/eos/user/d/dgenoves/anomaly_pipeline/strategies_v2/nosparse_dmodel128_seeds \
+    N_SEEDS=10"
+
+queue

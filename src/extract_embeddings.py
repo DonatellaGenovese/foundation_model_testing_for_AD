@@ -6,16 +6,23 @@ and extracts embeddings for all data splits (train/val/test). The embeddings
 are saved to disk for use in downstream tasks like training an autoencoder 
 for anomaly detection.
 
-Supported Models:
-- COLLIDE2VVanillaSupConLitModule (SupCon with projection head)
-- COLLIDE2VAugmentedSupConLitModule (SupCon with augmentation)
-- COLLIDE2VTransformerLitModule (standard classifier)
-- COLLIDE2VTinyMLPLitModule (MLP classifier)
+Supported Models: whatever `model_class` names in the config — there is no hardcoded
+list here, the class is imported and its `load_from_checkpoint` is called. The paper's
+five encoders map as follows (from the `_target_` of each configs/model/*.yaml):
+
+    SupCon  -> src.models.collide2v_augmented_supcon.COLLIDE2VAugmentedSupConLitModule
+    SimCLR  -> src.models.collide2v_augmented_selfsupcon.COLLIDE2VAugmentedSelfSupConLitModule
+    VCReg   -> src.models.collide2v_vicreg.COLLIDE2VVCRegLitModule
+    VICReg  -> src.models.collide2v_vicreg.COLLIDE2VVICRegLitModule
+    CE      -> src.models.collide2v_tinytransformer.COLLIDE2VTransformerLitModule
+
+VCReg and VICReg are two distinct classes in the same module; the names differ by one
+letter, so check which one a checkpoint was trained with before loading it.
 
 Usage:
     python src/extract_embeddings.py \
         ckpt_path=/path/to/checkpoint.ckpt \
-        experiment=anomaly_qcd_vs_higgs_raw \
+        experiment=anomaly_qcd_vs_higgs_raw_nosparse_cern \
         output_dir=/path/to/save/embeddings \
         use_projections=true  # For SupCon models: use projection head or encoder embeddings
 """
@@ -53,9 +60,9 @@ def extract_embeddings_from_loader(
     """
     Extract embeddings for all batches in a dataloader.
     
-    Supports multiple model types:
-    - SupCon models: Can extract from encoder or projection head
-    - Transformer/MLP models: Extract from encoder only
+    The branch taken depends on the model, not on its name: a `projection_head` that is
+    not None can be used when use_projections=True (SupCon, SimCLR, VCReg, VICReg),
+    otherwise extraction falls back to the encoder (the CE transformer has no head).
     
     Args:
         model: Pretrained LightningModule (any model with get_embeddings method)
@@ -170,7 +177,7 @@ def main(cfg: DictConfig):
     # Get model class from config
     if not cfg.get("model_class"):
         raise ValueError(
-            "Must provide model_class in config (e.g., model_class='src.models.collide2v_vanillasupcon.COLLIDE2VVanillaSupConLitModule')"
+            "Must provide model_class in config (e.g., model_class='src.models.collide2v_augmented_supcon.COLLIDE2VAugmentedSupConLitModule')"
         )
     
     model_class_path = cfg.model_class

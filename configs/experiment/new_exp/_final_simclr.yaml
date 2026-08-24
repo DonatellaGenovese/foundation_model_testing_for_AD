@@ -1,0 +1,44 @@
+# @package _global_
+#
+# Mixin: production-run overrides for SimCLR (SelfSupCon) on top of the
+# ablation backbone. Restored to match the OLD encoder_seeds AD-winning setup
+# (aug_supcon_12class_nosparse_selfsup_dmodel*_cern), not the ablation τ=0.05 /
+# fixed-d_ff scan that degraded AD.
+#
+# Near-OLD setup, with τ=0.1 (was 0.12281 OLD / 0.05 ablation):
+#   random_feature aug, n_layers=8, dropout=0.22575, mask_probability≈0.448,
+#   lr=1.257e-4, wd=3.579e-2, projection_dim=32, early_stopping patience=10.
+# n_heads=8 fixed for all d_model. Per-d_model child configs scale
+# d_ff / hidden_projection_dim as in OLD.
+
+model:
+  num_layers: 8
+  dropout: 0.22575
+  mask_probability: 0.44809
+  projection_dim: 32
+  temperature: 0.1
+  base_temperature: 0.1
+  optimizer:
+    lr: 1.257e-4
+    weight_decay: 3.579e-2
+
+data:
+  train_val_test_split_per_class: [1_000_000, 100_000, 100_000]
+  num_workers: 8
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+callbacks:
+  model_checkpoint:
+    save_last: false
+  early_stopping:
+    monitor: "val/con_loss"
+    patience: 10
+    mode: "min"
+
+logger:
+  mlflow:
+    experiment_name: "new_exp_simclr"
+    tracking_uri: /eos/user/d/dgenoves/anomaly_pipeline/new_exp/logs/mlflow/mlruns

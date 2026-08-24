@@ -1,0 +1,18 @@
+# One-off: SelfSup AugSupCon d256 — seed_9 only
+executable = src/wrapper_selfsup_d256_seed9.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/selfsup_d256_seed9_$(ClusterId).out
+error   = $(log_dir)/selfsup_d256_seed9_$(ClusterId).err
+log     = $(log_dir)/selfsup_d256_seed9_$(ClusterId).log
+
+run_as_owner = True
++JobFlavour  = "nextweek"
+getenv       = True
+request_cpus = 32
+request_gpus = 1
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 40000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4"
+queue

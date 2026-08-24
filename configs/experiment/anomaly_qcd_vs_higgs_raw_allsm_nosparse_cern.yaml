@@ -1,0 +1,120 @@
+# @package _global_
+#
+# Anomaly Detection Baseline B: AE trained on ALL 12 SM classes (raw features)
+# Comparison baseline for encoder+AE methods.
+#
+# Difference from Baseline A (anomaly_qcd_vs_higgs_raw_nosparse_cern):
+#   A: AE trained on QCD only  → AUROC = QCD vs Higgs
+#   B: AE trained on all 12 SM → AUROC = (all SM) vs Higgs
+#
+# 12-class nosparse (no DY_to_ll, Minbias_Soft_QCD, Upsilon_to_Leptons) + 3 Higgs.
+# Same AE hyperparameters as Baseline A for fair comparison.
+
+defaults:
+  - override /data: collide2v_basic
+  - override /paths: fm_testing
+
+mode: "raw"
+
+tags: ["anomaly_detection", "qcd_vs_higgs", "raw_features", "baseline_B", "allsm", "nosparse", "cern"]
+
+normal_classes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]  # all 12 SM classes
+anomaly_classes: [12, 13, 14]  # VBFHbb, HH_4b, ggHtautau
+
+data:
+  batch_size: 512
+  train_val_test_split_per_class: [100_000, 10_000, 10_000]
+  label: "v2_nosparse_higgs_allsm_highlevel"
+  num_workers: 7
+
+  to_classify:
+    - "QCD_inclusive"       # 0
+    - "Z_to_vv_jet"         # 1
+    - "Z_to_qq_uds"         # 2
+    - "Z_to_bb"             # 3
+    - "Z_to_cc"             # 4
+    - "W_to_lv"             # 5
+    - "W_to_qq"             # 6
+    - "gamma"               # 7
+    - "QCD_bb"              # 8
+    - "tt_all-hadr"         # 9
+    - "tt_semi-lept"        # 10
+    - "tt_all-lept"         # 11
+    - "VBFHbb"              # 12 — anomaly
+    - "HH_4b"               # 13 — anomaly
+    - "ggHtautau"           # 14 — anomaly
+
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+        - FullReco_JetPuppiAK4_NNeutrals
+      topk: 12
+      count: true
+
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_Charge
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+        - FullReco_Electron_D0
+        - FullReco_Electron_DZ
+      topk: 8
+      count: false
+
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_Charge
+        - FullReco_MuonTight_IsolationVarRhoCorr
+        - FullReco_MuonTight_D0
+        - FullReco_MuonTight_DZ
+      topk: 8
+      count: false
+
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+        - FullReco_PhotonTight_EhadOverEem
+        - FullReco_PhotonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null
+      count: false
+
+# Same AE hyperparameters as Baseline A
+model:
+  compression: 4
+  depth: 4
+  dropout: 0.03473
+  lr: 1.965e-4
+  weight_decay: 3.023e-5
+
+trainer:
+  max_epochs: 50
+  gradient_clip_val: 1.0
+
+preprocess:
+  enabled: false
+
+logger:
+  mlflow:
+    run_name: "ae_qcd_vs_higgs_raw_allsm_nosparse_cern"
+    experiment_name: "anomaly_detection"

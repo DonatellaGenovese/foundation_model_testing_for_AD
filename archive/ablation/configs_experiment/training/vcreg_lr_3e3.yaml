@@ -1,0 +1,17 @@
+# @package _global_
+# vcreg lr=0.003 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_vcreg
+  - override /paths: ablation_lr_cern
+  - _self_
+
+tags: ["ablation", "lr", "vcreg", "d128", "lr_3e3"]
+
+model:
+  optimizer:
+    lr: 0.003
+
+logger:
+  mlflow:
+    experiment_name: "ablation_lr"
+    run_name: "vcreg_lr_3e3"

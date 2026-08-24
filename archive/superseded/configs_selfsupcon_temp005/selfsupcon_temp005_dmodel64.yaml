@@ -1,0 +1,31 @@
+# @package _global_
+# SimCLR (SelfSupCon) at the ablation-selected temperature — d_model=64.
+#
+# Identical to new_exp/selfsupcon_dmodel64 in every respect except tau. The loss
+# ablation (Table 3) selects tau = 0.05 for SimCLR, where it beats tau = 0.10 by
+# 0.016 AUROC, but the production runs kept 0.10. The two temperatures already
+# tried on the full dataset confirm the direction rather than settle it: at
+# d_model = 128, tau = 0.100 beats tau = 0.123 by 0.0091 (9 sigma) with every other
+# hyperparameter identical. This run tests whether the remaining step down to the
+# ablation optimum also transfers.
+#
+# base_temperature tracks temperature, as in every other SimCLR config here, so the
+# loss scale factor stays neutral.
+defaults:
+  - ablation/training/backbone_selfsupcon
+  - new_exp/_final_selfsupcon
+  - _self_
+
+tags: ["new_exp", "selfsupcon", "dmodel64", "cern", "temp005"]
+
+model:
+  d_model: 64
+  n_heads: 8
+  d_ff: 512
+  hidden_projection_dim: 64
+  temperature: 0.05
+  base_temperature: 0.05
+
+logger:
+  mlflow:
+    run_name: "selfsupcon_temp005_dmodel64"

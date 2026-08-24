@@ -1,5 +1,11 @@
 enabled: false
 mode: fit_and_apply      # or apply_only or fit_only
+
+# Re-run even when norm_stats.json already exists in the output directory.
+# Needed with mode: apply_only, where that file is placed there on purpose as the
+# input rather than produced as the result; without it the stage would see the
+# statistics and skip.
+force: false
 fit_num_files_per_class: 5
 
 # Preprocessing transformation methods: identity, log1p, trig, onehot
@@ -40,7 +46,7 @@ feature_normalizations:
   vertexcoord: robust
   EhadOverEem: robust
   isolation: robust
-  count: minmax
+  count: none
   displacement: robust
   ncharged: robust
   nneutrals: robust

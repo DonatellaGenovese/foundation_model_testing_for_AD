@@ -1,0 +1,25 @@
+# @package _global_
+# selfsupcon scheduler=cosine ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_selfsupcon
+  - override /paths: ablation_sched_cern
+  - _self_
+
+tags: ["ablation", "sched", "selfsupcon", "d128", "sched_cosine"]
+
+model:
+  scheduler:
+    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+    _partial_: true
+    T_max: ${trainer.max_epochs}
+    eta_min: 0.0
+    mode: null
+    factor: null
+    patience: null
+    threshold: null
+    threshold_mode: null
+
+logger:
+  mlflow:
+    experiment_name: "ablation_sched"
+    run_name: "selfsupcon_sched_cosine"

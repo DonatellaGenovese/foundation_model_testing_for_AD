@@ -1,0 +1,18 @@
+# @package _global_
+# SelfSupCon — random masking, particle-level (mask entire particles)
+# Usage: python src/train.py experiment=ablation/selfsupcon_random_particle seed=42
+
+defaults:
+  - ablation/backbone_selfsupcon
+  - _self_
+
+tags: ["ablation", "augmentation", "selfsupcon", "random", "particle_level"]
+
+model:
+  augmentation_type: "random"
+  mask_full_particle: true
+  mask_probability: 0.3
+
+logger:
+  mlflow:
+    run_name: "ablation_selfsupcon_random_particle"

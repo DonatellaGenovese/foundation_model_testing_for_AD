@@ -1,0 +1,16 @@
+# @package _global_
+# VICReg (physics aug, layers=2) production run — d_model=32 (n_heads=8, d_ff=512, proj=64 fixed)
+defaults:
+  - backbone/backbone_vicreg
+  - new_exp/_final_vicreg
+  - _self_
+
+tags: ["new_exp", "vicreg", "physics", "dmodel32", "cern"]
+
+model:
+  d_model: 32
+  projection_dim: 16   # d/2 (paper value)
+
+logger:
+  mlflow:
+    run_name: "vicreg_physics_dmodel32"

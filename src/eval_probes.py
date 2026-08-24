@@ -1,19 +1,19 @@
 """
-Evaluate a pretrained checkpoint with Linear and KNN probes.
+Evaluate a pretrained checkpoint with a Linear Probe.
 
 This script loads a pretrained contrastive model and evaluates the quality
 of learned embeddings using:
 1. Linear Probe: Trainable linear classifier on frozen embeddings
-2. KNN Probe: Non-parametric K-nearest neighbors on frozen embeddings
 
 Usage:
     python src/eval_probes.py ckpt_path=/path/to/checkpoint.ckpt
-    python src/eval_probes.py experiment=vanillasupcon_6class_pretrain ckpt_path=/path/to/checkpoint.ckpt
+    python src/eval_probes.py experiment=vcreg_12class_nosparse_dmodel256_cern ckpt_path=/path/to/checkpoint.ckpt
 """
 
 from typing import Any, Dict, List, Tuple, Union
 from pathlib import Path
 import json
+import math
 
 import hydra
 import rootutils
@@ -29,13 +29,13 @@ import matplotlib.pyplot as plt
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
-from src.models.collide2v_vanillasupcon import (
-    COLLIDE2VVanillaSupConLitModule,
-    LinearProbe,
-    KNNProbe,
-)
+from src.models.components.probes import LinearProbe
 from src.models.collide2v_augmented_supcon import COLLIDE2VAugmentedSupConLitModule
 from src.models.collide2v_augmented_selfsupcon import COLLIDE2VAugmentedSelfSupConLitModule
+from src.models.collide2v_vicreg import (
+    COLLIDE2VVICRegLitModule,
+    COLLIDE2VVCRegLitModule,
+)
 from src.utils import RankedLogger
 
 log = RankedLogger(__name__, rank_zero_only=True)
@@ -247,22 +247,64 @@ def visualize_embeddings_umap(
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
-    
+
     log.info(f"UMAP visualization saved to: {output_path}")
+
+    # ── Per-class subplot grid ────────────────────────────────────────────────
+    # Each subplot shows all points in grey and highlights one class in color.
+    n_classes = len(unique_labels)
+    ncols = math.ceil(math.sqrt(n_classes))
+    nrows = math.ceil(n_classes / ncols)
+
+    fig2, axes = plt.subplots(nrows, ncols, figsize=(ncols * 4, nrows * 3.5))
+    axes = np.array(axes).flatten()
+
+    for idx, label in enumerate(unique_labels):
+        ax = axes[idx]
+        mask = labels == label
+        label_idx = int(label)
+        class_name = class_names[label_idx] if label_idx < len(class_names) else f"Class {label_idx}"
+
+        # All other points in light grey
+        ax.scatter(
+            embedding_2d[~mask, 0], embedding_2d[~mask, 1],
+            c='lightgrey', alpha=0.3, s=4, edgecolors='none'
+        )
+        # Highlighted class in color
+        ax.scatter(
+            embedding_2d[mask, 0], embedding_2d[mask, 1],
+            c=[colors[idx]], alpha=0.7, s=6, edgecolors='none', label=class_name
+        )
+        ax.set_title(class_name, fontsize=9, fontweight='bold')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    # Hide unused subplots
+    for ax in axes[n_classes:]:
+        ax.set_visible(False)
+
+    fig2.suptitle(f"{title} — per class", fontsize=13, fontweight='bold', y=1.01)
+    plt.tight_layout()
+    subplots_path = output_path.with_name(output_path.stem + "_subplots.png")
+    plt.savefig(subplots_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    log.info(f"UMAP per-class subplots saved to: {subplots_path}")
 
 
 def evaluate_with_probes(
     cfg: DictConfig,
     model: Union[
-        COLLIDE2VVanillaSupConLitModule,
         COLLIDE2VAugmentedSupConLitModule,
         COLLIDE2VAugmentedSelfSupConLitModule,
+        COLLIDE2VVICRegLitModule,
+        COLLIDE2VVCRegLitModule,
     ],
     datamodule: LightningDataModule,
     call_source: str = 'standalone',
 ) -> Dict[str, float]:
     """
-    Evaluate trained model with Linear and KNN probes.
+    Evaluate trained model with a Linear Probe.
     
     Args:
         cfg: Hydra configuration
@@ -318,7 +360,7 @@ def evaluate_with_probes(
         log.warning("No eval config found! Using defaults.")
         eval_cfg = OmegaConf.create({
             "linear_probe": {"max_epochs": 50, "lr": 0.001, "weight_decay": 0.0},
-            "knn_probe": {"k_values": [1, 3, 5, 10, 20], "metric": "cosine"},
+
             "output_dir": Path(cfg.paths.output_dir) / "probe_evaluation"
         })
     
@@ -326,59 +368,13 @@ def evaluate_with_probes(
     output_dir = Path(eval_cfg.get("output_dir", "./probe_evaluation"))
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # ========================================
-    # DIAGNOSTIC SAVES - RECORD DATAMODULE STATE
-    # ========================================
-    log.info("\n" + "="*80)
-    log.info(f"SAVING DIAGNOSTICS ({call_source})")
-    log.info("="*80)
-    
-    debug_dir = Path("debug_comparison")
-    debug_dir.mkdir(exist_ok=True)
-    
-    # Determine file prefix based on source
-    file_prefix = "train_path" if call_source == "train.py" else "eval_path"
-    
-    # 1. Save test dataloader samples
-    log.info("Extracting first batch from test dataloader...")
-    test_dl = datamodule.test_dataloader()
-    test_batch = next(iter(test_dl))
-    test_features, test_labels = test_batch
-    
-    np.savez(
-        debug_dir / f"{file_prefix}_test_batch.npz",
-        features=test_features.cpu().numpy(),
-        labels=test_labels.cpu().numpy()
-    )
-    log.info(f"Saved first test batch: {test_features.shape}, labels: {test_labels[:20].tolist()}")
-    
-    # 2. Save datamodule metadata
-    datamodule_info = {
-        'num_classes': datamodule.num_classes,
-        'batch_size': datamodule.batch_size_per_device,
-        'class_names': datamodule.classnames if hasattr(datamodule, 'classnames') else None,
-        'teststream_shuffle': datamodule.teststream.shuffle if hasattr(datamodule, 'teststream') else None,
-        'source': call_source,
-        'datamodule_id': id(datamodule),
-        'datamodule_setup_called': hasattr(datamodule, 'teststream'),
-    }
-    
-    # Save test file order if available
-    if hasattr(datamodule, 'teststream') and hasattr(datamodule.teststream, 'all_files'):
-        test_files = datamodule.teststream.all_files
-        datamodule_info['num_test_files'] = len(test_files)
-        datamodule_info['first_5_files'] = [str(f) for f in test_files[:5]]
-        datamodule_info['last_5_files'] = [str(f) for f in test_files[-5:]]
-        log.info(f"Test dataset has {len(test_files)} files")
-        log.info(f"First 5 files: {test_files[:5]}")
-        log.info(f"Last 5 files: {test_files[-5:]}")
-    
-    with open(debug_dir / f"{file_prefix}_datamodule_info.json", 'w') as f:
-        json.dump(datamodule_info, f, indent=2, default=str)
+    # A `debug_comparison/` dump used to be written here: first test batch plus
+    # datamodule metadata, prefixed train_path/eval_path so the two entry points could
+    # be diffed by hand. Removed — nothing read it, it landed in the repo root (the
+    # path was relative to cwd, and the wrapper cd's to PROJECT_DIR), concurrent probe
+    # jobs raced on the same filenames, and it cost an extra dataloader pass over the
+    # test split on every run.
 
-    log.info(f"Saved datamodule info to: {debug_dir / f'{file_prefix}_datamodule_info.json'}")
-    log.info("="*80 + "\n")
-    
     results = {}
     
     # Get class names for visualizations
@@ -498,17 +494,10 @@ def evaluate_with_probes(
             labels=test_labels
         )
         log.info(f"[DEBUG] Saved embeddings to: {embeddings_debug_path}")
-        
-        # Also save to debug_comparison directory for easy comparison
-        file_prefix = "train_path" if call_source == "train.py" else "eval_path"
-        debug_embeddings_path = debug_dir / f"{file_prefix}_embeddings.npz"
-        np.savez(
-            debug_embeddings_path,
-            embeddings=test_embeddings,
-            labels=test_labels
-        )
-        log.info(f"[DEBUG] Also saved embeddings to: {debug_embeddings_path}")
-        
+        # A second copy of these same embeddings went to debug_comparison/ in the repo
+        # root; removed with the rest of that dump. This one, in the job's output dir,
+        # is the copy that is kept.
+
         # Create UMAP visualization on embeddings
         visualize_embeddings_umap(
             embeddings=test_embeddings,
@@ -729,53 +718,6 @@ def evaluate_with_probes(
     log.info("")
     
     # ========================================
-    # 3. KNN PROBE EVALUATION
-    # ========================================
-    log.info("\n" + "="*80)
-    log.info("3. KNN PROBE EVALUATION")
-    log.info("="*80)
-    
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    # Get class names if available
-    class_names = None
-    if hasattr(datamodule, 'class_names'):
-        class_names = datamodule.class_names
-    elif hasattr(cfg.data, 'to_classify'):
-        class_names = cfg.data.to_classify
-    
-    knn_results_all = []
-    for k in eval_cfg.knn_probe.k_values:
-        log.info(f"\n--- Testing k={k} ---")
-        
-        knn_probe = KNNProbe(
-            encoder=encoder,
-            k=k,
-            metric=eval_cfg.knn_probe.metric,
-            device=device
-        )
-        
-        knn_probe.fit(datamodule.train_dataloader())
-        knn_results = knn_probe.evaluate(
-            datamodule.test_dataloader(),
-            class_names=class_names
-        )
-        
-        knn_results_all.append((k, knn_results))
-        results[f'knn_probe_k{k}_accuracy'] = float(knn_results['knn_accuracy'])
-        results[f'knn_probe_k{k}_f1_macro'] = float(knn_results['knn_f1_macro'])
-        results[f'knn_probe_k{k}_auroc_macro'] = float(knn_results['knn_auroc_macro'])
-        
-        # Store per-class results with class names
-        if class_names:
-            for i, name in enumerate(class_names):
-                results[f'knn_probe_k{k}_f1_{name}'] = float(knn_results['knn_f1_per_class'][i])
-                results[f'knn_probe_k{k}_auroc_{name}'] = float(knn_results['knn_auroc_per_class'][i])
-        else:
-            results[f'knn_probe_k{k}_f1_per_class'] = knn_results['knn_f1_per_class'].tolist()
-            results[f'knn_probe_k{k}_auroc_per_class'] = knn_results['knn_auroc_per_class'].tolist()
-    
-    # ========================================
     # SUMMARY
     # ========================================
     log.info("\n" + "="*80)
@@ -785,13 +727,6 @@ def evaluate_with_probes(
     log.info(f"  Accuracy: {linear_accuracy:.4f}")
     log.info(f"  F1 (macro): {linear_f1_macro:.4f}")
     log.info(f"  AUROC (macro): {linear_auroc_macro:.4f}")
-    log.info("\nKNN Probe Results:")
-    for k, res in knn_results_all:
-        log.info(f"  k={k:2d}: Acc={res['knn_accuracy']:.4f}, F1={res['knn_f1_macro']:.4f}, AUROC={res['knn_auroc_macro']:.4f}")
-        if class_names and k == knn_results_all[-1][0]:  # Show detailed results for best k (last one)
-            log.info(f"    Per-Class Metrics (k={k}):")
-            for i, name in enumerate(class_names):
-                log.info(f"      {name:30s}: F1={res['knn_f1_per_class'][i]:.4f}, AUROC={res['knn_auroc_per_class'][i]:.4f}")
     log.info("="*80 + "\n")
     
     # Save detailed results to JSON
@@ -825,18 +760,6 @@ def evaluate_with_probes(
             for i, name in enumerate(class_names):
                 f.write(f"    {name:30s}: F1={linear_f1_per_class[i]:.4f}, AUROC={linear_auroc_per_class[i]:.4f}\n")
         
-        f.write("\n" + "-"*80 + "\n\n")
-        f.write("KNN PROBE:\n")
-        for k, res in knn_results_all:
-            f.write(f"\n  k={k}:\n")
-            f.write(f"    Accuracy: {res['knn_accuracy']:.4f}\n")
-            f.write(f"    F1 (macro): {res['knn_f1_macro']:.4f}\n")
-            f.write(f"    AUROC (macro): {res['knn_auroc_macro']:.4f}\n")
-            
-            if class_names:
-                f.write(f"    Per-Class Metrics:\n")
-                for i, name in enumerate(class_names):
-                    f.write(f"      {name:30s}: F1={res['knn_f1_per_class'][i]:.4f}, AUROC={res['knn_auroc_per_class'][i]:.4f}\n")
     
     log.info(f"Summary saved to: {summary_path}")
     
@@ -950,49 +873,53 @@ def main(cfg: DictConfig) -> None:
     log.info(f"Loading checkpoint: {ckpt_path}")
     log.info(f"{'='*80}\n")
     
-    # Load pretrained model (vanilla SupCon, augmented SupCon, or augmented self-supervised SupCon)
+    # Load pretrained model — use cfg.model._target_ to select the right class directly.
+    _TARGET_TO_CLS = {
+        "src.models.collide2v_augmented_supcon.COLLIDE2VAugmentedSupConLitModule":     COLLIDE2VAugmentedSupConLitModule,
+        "src.models.collide2v_augmented_selfsupcon.COLLIDE2VAugmentedSelfSupConLitModule": COLLIDE2VAugmentedSelfSupConLitModule,
+        "src.models.collide2v_vicreg.COLLIDE2VVICRegLitModule":                        COLLIDE2VVICRegLitModule,
+        "src.models.collide2v_vicreg.COLLIDE2VVCRegLitModule":                         COLLIDE2VVCRegLitModule,
+    }
+
     model = None
-    vanilla_error = None
-    augmented_error = None
-    augmented_selfsup_error = None
-
-    # 1) Try vanilla SupCon checkpoint
+    load_errors = {}
     try:
-        model = COLLIDE2VVanillaSupConLitModule.load_from_checkpoint(
-            str(ckpt_path), weights_only=False
-        )
-        log.info("Loaded checkpoint as COLLIDE2VVanillaSupConLitModule.")
-    except Exception as e:
-        vanilla_error = str(e)
-        log.warning(f"Could not load as COLLIDE2VVanillaSupConLitModule: {e}")
+        model_target = cfg.model._target_
+    except Exception:
+        model_target = None
 
-    # 2) Fallback: try augmented SupCon checkpoint
-    if model is None:
+    if model_target and model_target in _TARGET_TO_CLS:
+        cls_name = model_target.split(".")[-1]
+        cls = _TARGET_TO_CLS[model_target]
         try:
-            # AugmentedSupCon uses on_load_checkpoint hook to build encoder before loading weights
-            model = COLLIDE2VAugmentedSupConLitModule.load_from_checkpoint(
-                str(ckpt_path), weights_only=False
-            )
-            log.info("Loaded checkpoint as COLLIDE2VAugmentedSupConLitModule.")
+            model = cls.load_from_checkpoint(str(ckpt_path), weights_only=False)
+            log.info(f"Loaded checkpoint as {cls_name}.")
         except Exception as e:
-            augmented_error = str(e)
+            load_errors[cls_name] = str(e)
+            log.warning(f"Could not load as {cls_name} (from cfg.model._target_): {e}")
 
-    # 3) Fallback: try augmented self-supervised SupCon checkpoint
     if model is None:
-        try:
-            model = COLLIDE2VAugmentedSelfSupConLitModule.load_from_checkpoint(
-                str(ckpt_path), weights_only=False
-            )
-            log.info("Loaded checkpoint as COLLIDE2VAugmentedSelfSupConLitModule.")
-        except Exception as e:
-            augmented_selfsup_error = str(e)
-            log.error(
-                "Failed to load checkpoint as vanilla, augmented supervised, or augmented self-supervised model. "
-                f"Vanilla error: {vanilla_error}; "
-                f"Augmented supervised error: {augmented_error}; "
-                f"Augmented self-supervised error: {augmented_selfsup_error}"
-            )
-            raise
+        # Fallback: try each class in turn
+        _candidates = [
+            ("COLLIDE2VAugmentedSupConLitModule",      COLLIDE2VAugmentedSupConLitModule),
+            ("COLLIDE2VAugmentedSelfSupConLitModule",  COLLIDE2VAugmentedSelfSupConLitModule),
+            ("COLLIDE2VVICRegLitModule",               COLLIDE2VVICRegLitModule),
+            ("COLLIDE2VVCRegLitModule",                COLLIDE2VVCRegLitModule),
+        ]
+        for cls_name, cls in _candidates:
+            if model is not None:
+                break
+            try:
+                model = cls.load_from_checkpoint(str(ckpt_path), weights_only=False)
+                log.info(f"Loaded checkpoint as {cls_name} (fallback detection).")
+            except Exception as e:
+                load_errors[cls_name] = str(e)
+                log.warning(f"Could not load as {cls_name}: {e}")
+
+    if model is None:
+        error_summary = "; ".join(f"{k}: {v}" for k, v in load_errors.items())
+        log.error(f"Failed to load checkpoint with any known model class. Errors: {error_summary}")
+        raise RuntimeError(f"Could not load checkpoint {ckpt_path}. Errors: {error_summary}")
 
     model.eval()
     torch.save(model.encoder.state_dict(), "encoder_eval.pth")
@@ -1007,56 +934,19 @@ def main(cfg: DictConfig) -> None:
         cfg.data.paths.eos_preproc_dir = preproc_path
         print(f"[MATCH TRAIN] Using preprocessed folder for all splits: {preproc_path}")
 
-    datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
-    
-    # ========================================
-    # DIAGNOSTIC SAVES - STANDALONE EVAL PATH
-    # ========================================
-    log.info("\n" + "="*80)
-    log.info("BEFORE DATAMODULE SETUP - SAVING DIAGNOSTICS")
-    log.info("="*80)
+    datamodule: LightningDataModule = hydra.utils.instantiate(
+        cfg.data,
+        seed=cfg.get("seed", None),
+    )
     
     log.info("Setting up datamodule...")
     datamodule.setup(stage="fit")
     log.info("Datamodule setup complete")
-    
-    debug_dir = Path("debug_comparison")
-    debug_dir.mkdir(exist_ok=True)
-    
-    # Save test dataloader samples BEFORE evaluate_with_probes
-    log.info("Extracting first batch from test dataloader (standalone path)...")
-    test_dl = datamodule.test_dataloader()
-    test_batch = next(iter(test_dl))
-    test_features, test_labels = test_batch
-    
-    np.savez(
-        debug_dir / "eval_path_test_batch_before.npz",
-        features=test_features.cpu().numpy(),
-        labels=test_labels.cpu().numpy()
-    )
-    log.info(f"Saved first test batch (before evaluate_with_probes): {test_features.shape}")
-    log.info(f"First 20 labels: {test_labels[:20].tolist()}")
-    
-    # Save datamodule metadata
-    datamodule_info = {
-        'source': 'eval_probes.py (main)',
-        'datamodule_id': id(datamodule),
-        'num_classes': datamodule.num_classes,
-        'batch_size': datamodule.batch_size_per_device,
-    }
-    
-    if hasattr(datamodule, 'teststream') and hasattr(datamodule.teststream, 'all_files'):
-        test_files = datamodule.teststream.all_files
-        datamodule_info['num_test_files'] = len(test_files)
-        datamodule_info['first_5_files'] = [str(f) for f in test_files[:5]]
-        datamodule_info['last_5_files'] = [str(f) for f in test_files[-5:]]
-        log.info(f"Test dataset has {len(test_files)} files")
-        log.info(f"First 5 files: {test_files[:5]}")
-    
-    with open(debug_dir / "eval_path_datamodule_info_before.json", 'w') as f:
-        json.dump(datamodule_info, f, indent=2, default=str)
-    
-    log.info("="*80 + "\n")
+
+    # The `_before` half of the debug_comparison/ dump was written here — same test
+    # batch and datamodule metadata, taken before evaluate_with_probes so the two could
+    # be compared. Removed with the rest of that dump; the setup call above is not
+    # diagnostic and stays.
     
     # Evaluate with probes
     results = evaluate_with_probes(cfg, model, datamodule, call_source='eval_probes.py')

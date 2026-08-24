@@ -1,0 +1,25 @@
+# @package _global_
+# vcreg scheduler=plateau ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_vcreg
+  - override /paths: ablation_sched_cern
+  - _self_
+
+tags: ["ablation", "sched", "vcreg", "d128", "sched_plateau"]
+
+model:
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: min
+    factor: 0.2
+    patience: 10
+    threshold: 0.0001
+    threshold_mode: rel
+    T_max: null
+    eta_min: null
+
+logger:
+  mlflow:
+    experiment_name: "ablation_sched"
+    run_name: "vcreg_sched_plateau"

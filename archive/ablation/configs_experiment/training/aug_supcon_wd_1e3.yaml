@@ -1,0 +1,17 @@
+# @package _global_
+# aug_supcon weight_decay=0.001 ablation — standard d=128 architecture.
+defaults:
+  - ablation/training/backbone_aug_supcon
+  - override /paths: ablation_wd_cern
+  - _self_
+
+tags: ["ablation", "wd", "aug_supcon", "d128", "wd_1e3"]
+
+model:
+  optimizer:
+    weight_decay: 0.001
+
+logger:
+  mlflow:
+    experiment_name: "ablation_wd"
+    run_name: "aug_supcon_wd_1e3"

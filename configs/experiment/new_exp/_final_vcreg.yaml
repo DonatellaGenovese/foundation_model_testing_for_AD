@@ -1,0 +1,45 @@
+# @package _global_
+#
+# Mixin: production-run overrides for VCReg on top of the ablation backbone.
+# No defaults referencing the ablation backbone here (avoids Hydra nested-relative
+# resolution issues); pulled in by the per-d_model primary configs together with
+# backbone/backbone_vcreg.
+#
+# Ablation-informed final (user choice):
+#   - α/β = 25/1, dropout=0.1
+#   - lr=1e-3, wd=1e-5, ReduceLROnPlateau
+#   - n_heads=8, n_layers=6 for all d_model
+#   - d_ff = 4 × d_model (set in per-d_model children)
+#   - no augmentation (supervised CE + var + cov)
+#   - ckpt on val/vcreg_loss; save_last=false
+
+model:
+  n_heads: 8
+  num_layers: 6
+  dropout: 0.1
+
+  var_weight: 25.0
+  cov_weight: 1.0
+
+  optimizer:
+    lr: 1.0e-3
+    weight_decay: 1.0e-5
+
+data:
+  batch_size: 1024
+  train_val_test_split_per_class: [1_000_000, 100_000, 100_000]
+  num_workers: 8
+
+trainer:
+  max_epochs: 50
+  precision: 32
+  accumulate_grad_batches: 1
+
+callbacks:
+  model_checkpoint:
+    save_last: false
+
+logger:
+  mlflow:
+    experiment_name: "new_exp_vcreg"
+    tracking_uri: /eos/user/d/dgenoves/anomaly_pipeline/new_exp/logs/mlflow/mlruns

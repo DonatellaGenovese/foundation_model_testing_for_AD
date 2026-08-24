@@ -1,0 +1,43 @@
+# ================================
+# Condor: AE anomaly detection across VICReg encoder seeds
+#
+# For each of 10 encoder seeds:
+#   1. Extract embeddings from the VICReg encoder checkpoint
+#   2. Train AE on all 12 SM embeddings (ae_seed=42), threshold on QCD
+#   3. Evaluate AUROC on VBFHbb, HH_4b, ggHtautau
+#
+# Encoder checkpoints:
+#   encoder_seeds/vicreg_12class_nosparse_dmodel128_cern/seed_{0..9}/
+# Results:
+#   ad_encoder_seeds/vicreg_nosparse_dmodel128/
+#
+# Usage:
+#   condor_submit src/encoder_seeds_anomaly_vicreg.sub
+# ================================
+
+executable = src/wrapper_encoder_seeds_anomaly.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs
+output  = $(log_dir)/encoder_seeds_anomaly_vicreg_$(ClusterId).out
+error   = $(log_dir)/encoder_seeds_anomaly_vicreg_$(ClusterId).err
+log     = $(log_dir)/encoder_seeds_anomaly_vicreg_$(ClusterId).log
+
+run_as_owner = True
+
++JobFlavour = "nextweek"
+
+getenv       = True
+request_cpus = 8
+request_gpus = 1
+
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+    PHASE2_EXPERIMENT=anomaly_qcd_vs_higgs_embedding_vicreg_nosparse_allsm_dmodel128_cern \
+    ENCODER_SEEDS_DIR=/eos/user/d/dgenoves/anomaly_pipeline/encoder_seeds/vicreg_12class_nosparse_dmodel128_cern \
+    OUTPUT_DIR=/eos/user/d/dgenoves/anomaly_pipeline/ad_encoder_seeds/vicreg_nosparse_dmodel128 \
+    AE_SEED=42 \
+    ENCODER_SEEDS=0,1,2,3,4,5,6,7,8,9"
+
+queue

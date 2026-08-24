@@ -1,0 +1,39 @@
+# ================================
+# Condor: XAI steps 03-06 at the SELECTED K=7, in the 64-dim PCA space.
+#   condor_submit scripts/xai/submit/xai_k7.sub
+#
+# Completes what only step 04 had been run at: rank_k7/ holds the Wasserstein
+# ranking at K=7 for both signals, but the flag rates (03), the K+-2 robustness
+# (05) and the AE-mechanism check (06) were only ever produced at K=12 in the
+# unprojected space, i.e. for a configuration the paper no longer uses. The
+# existing 05_robustness at 10/12/14 does not support K=7 at all.
+#
+# The K=7 PCA64 mixture is reused from the K scan rather than refitted, so every
+# step here refers to the same partition the ranking already used.
+#
+# Two signals, one job each: HH->4b (label 13) and the CASE HV Z'->mumu (label 20).
+# ================================
+
+executable = scripts/xai/submit/wrapper_xai_k7.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/xai_k7_$(SIGNAL)_$(ClusterId).out
+error   = $(log_dir)/xai_k7_$(SIGNAL)_$(ClusterId).err
+log     = $(log_dir)/xai_k7_$(SIGNAL)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 4
+request_gpus   = 1
+request_memory = 32768
+Requirements   = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+SEED   = 3
+DMODEL = 256
+KVAL   = 7
+PCADIM = 64
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) KVAL=$(KVAL) PCADIM=$(PCADIM) SIGNAL=$(SIGNAL) FPR=0.10 MIN_FRAC=0.05 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4"
+
+queue SIGNAL in (hh4b hvdilep)

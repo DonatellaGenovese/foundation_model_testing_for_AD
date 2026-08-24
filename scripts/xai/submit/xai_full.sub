@@ -1,0 +1,34 @@
+# ================================
+# Condor: full XAI pipeline (steps 01-06) — VCReg smnorm, seed 3
+#   condor_submit scripts/xai/submit/xai_full.sub
+#
+# One job per d_model. d256 is the model the paper explains (best AD: HH4b
+# TPR@FPR10 0.972, VBFHbb 0.766); d128 runs alongside as the robustness check on
+# d_model (0.900 / 0.603) and is where the exploratory work was done.
+# Seed 3 is the median seed in both dimensions, so it is representative rather
+# than cherry-picked.
+#
+# Requires scripts/xai/submit/extract_xai_emb.sub to have completed first —
+# the wrapper hard-fails if the embeddings are missing.
+# ================================
+
+executable = scripts/xai/submit/wrapper_xai_full.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/xai_full_d$(DMODEL)_seed$(SEED)_$(ClusterId).out
+error   = $(log_dir)/xai_full_d$(DMODEL)_seed$(SEED)_$(ClusterId).err
+log     = $(log_dir)/xai_full_d$(DMODEL)_seed$(SEED)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_gpus   = 1
+request_memory = 32768
+Requirements   = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+SEED = 3
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) FPR=0.10 MIN_FRAC=0.05 OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue DMODEL in (256 128)

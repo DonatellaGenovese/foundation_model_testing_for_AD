@@ -1,0 +1,39 @@
+# ================================
+# Condor: does a full covariance buy anything? d64 only.
+#   condor_submit scripts/xai/submit/select_k_v3_full.sub
+#
+# VCReg decorrelates the embedding dimensions through its covariance term, which
+# is the reason the pipeline uses a diagonal mixture. That decorrelation is a
+# batch statistic though, so correlations may survive inside individual
+# components, where a diagonal mixture cannot represent them. This run measures
+# whether that matters.
+#
+# d64 only: a full covariance costs K(d + d(d+1)/2) parameters, which against
+# 1.2M events is 70 events per parameter at d=64, 18 at d=128 and 5 at d=256.
+# Only the first is a fit worth trusting.
+#
+# A shorter grid and fewer restarts than the diagonal run: this answers a yes/no
+# question, it is not the selection itself. Full-covariance EM is also markedly
+# slower per iteration.
+# ================================
+
+executable = scripts/xai/submit/wrapper_select_k_v2.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/select_k_v3_d$(DMODEL)_full_$(ClusterId).out
+error   = $(log_dir)/select_k_v3_d$(DMODEL)_full_$(ClusterId).err
+log     = $(log_dir)/select_k_v3_d$(DMODEL)_full_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "nextweek"
+getenv         = True
+request_cpus   = 16
+request_memory = 65536
+
+SEED = 3
+# Single quotes around KVALS: Condor's environment syntax splits on spaces, so a
+# value containing them has to be quoted or it is parsed as further variables.
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) KVALS='6 8 10' NRESTARTS=6 COVTYPE=full OMP_NUM_THREADS=16 MKL_NUM_THREADS=16"
+
+queue DMODEL in (64)

@@ -1,0 +1,13 @@
+executable = scripts/xai/submit/wrapper_preprocess_smnorm.sh
+arguments  = $(ClusterId)
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/preprocess_smnorm_$(ClusterId).out
+error   = $(log_dir)/preprocess_smnorm_$(ClusterId).err
+log     = $(log_dir)/preprocess_smnorm_$(ClusterId).log
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_memory = 32768
+environment = "OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+queue

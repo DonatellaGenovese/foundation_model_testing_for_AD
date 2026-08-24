@@ -1,0 +1,49 @@
+# ================================
+# Condor: choose K from the physics profiles — no BIC, no ARI.
+#   condor_submit scripts/xai/submit/select_k_profiles.sub
+#
+# BIC never selects (monotonically decreasing over every K in all five spaces
+# measured) and ARI measures reproducibility rather than quality — it can be raised
+# by discarding information, which is what the ARI 0.997 at PCA16/K=11 looks like.
+# This scan tests instead the two properties the paper actually depends on: that no
+# two regions are duplicates, and that no region is too thinly populated to
+# characterise. See select_k_profiles.py for how the duplicate threshold is
+# calibrated by permutation rather than chosen.
+#
+# Two jobs, one per candidate space: the unprojected d256 (simplest to defend, no
+# extra methodological step) and the PCA-64 projection of the same encoder (52.7% of
+# the variance, the least aggressive reduction that reached stability). The AE — and
+# therefore every AD number in the paper — stays on the full 256-dimensional
+# embedding in both cases; only the clustering is projected.
+#
+# Resources stay well below 16 CPU / 64 GB on purpose: that request is rounded up to
+# 24 CPU / 66 GB and routed to the `bigmcore` hostgroup, which holds 10 slots in the
+# whole pool. The v3 PCA job sat idle for seven hours because of it. Nothing here
+# needs that: only K=3 and K=4 are fitted, the rest are reused pickles.
+# ================================
+
+executable = scripts/xai/submit/wrapper_select_k_profiles.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/select_k_profiles_d256_$(TAG)_$(ClusterId).out
+error   = $(log_dir)/select_k_profiles_d256_$(TAG)_$(ClusterId).err
+log     = $(log_dir)/select_k_profiles_d256_$(TAG)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "nextweek"
+getenv         = True
+request_cpus   = 8
+request_memory = 24576
+
+SEED   = 3
+DMODEL = 256
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) PCADIM=$(PCADIM) KVALS='3 4 5 6 7 8 9 10 11 12' NPERM=200 OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+TAG = raw
+PCADIM = 0
+queue
+
+TAG = pca64
+PCADIM = 64
+queue

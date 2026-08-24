@@ -1,0 +1,34 @@
+# ================================
+# Condor: interpretability on a CASE signal (default HV Z'->mumu).
+#   condor_submit scripts/xai/submit/xai_case.sub
+#
+# The second signal of Section 4.3. Its purpose is to test whether the leading
+# observable tracks the physics of the signal rather than repeating one answer: on
+# HH->4b the pipeline selects n_bjets, and this signal has 5.86 leptons per event and
+# essentially no b-jets, so n_leptons is the expected outcome.
+#
+# The model is held fixed (VCReg d256 seed 3, PCA 64, K=7) and so is the SM
+# background, reused verbatim from the HH->4b matched array. Only the signal changes,
+# which is what makes the comparison between the two interpretations meaningful.
+# ================================
+
+executable = scripts/xai/submit/wrapper_xai_case.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/xai_case_$(ClusterId).out
+error   = $(log_dir)/xai_case_$(ClusterId).err
+log     = $(log_dir)/xai_case_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_gpus   = 1
+request_memory = 24576
+
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "DMODEL=256 SEED=3 CASE_LABEL=HVdilep_Zp1000_piD2_mumu SIGLABEL=20 PCADIM=64 KVAL=7 OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue

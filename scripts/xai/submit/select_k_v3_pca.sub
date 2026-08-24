@@ -1,0 +1,36 @@
+# ================================
+# Condor: does PCA help the mixture at d=256?
+#   condor_submit scripts/xai/submit/select_k_v3_pca.sub
+#
+# Run to settle a question a reviewer will ask, not because the spectrum suggests
+# it will help. VCReg's variance term keeps every embedding dimension at high
+# variance, so the spectrum is nearly flat: 147 of 256 components carry 90% of the
+# variance and the leading one carries 2.4%. Retaining 99% leaves 209 dimensions,
+# a 18% reduction.
+#
+# The truncation is therefore mild, but the projection also rotates onto the
+# principal axes, which is the basis a diagonal covariance implicitly assumes. If
+# anything moves, that rotation is the more likely cause — which is why the run is
+# worth doing even though the reduction is small.
+#
+# Same grid and restarts as the diagonal run, so the two are directly comparable.
+# ================================
+
+executable = scripts/xai/submit/wrapper_select_k_v2.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/select_k_v3_d$(DMODEL)_pca_$(ClusterId).out
+error   = $(log_dir)/select_k_v3_d$(DMODEL)_pca_$(ClusterId).err
+log     = $(log_dir)/select_k_v3_d$(DMODEL)_pca_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "nextweek"
+getenv         = True
+request_cpus   = 16
+request_memory = 65536
+
+SEED = 3
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) NRESTARTS=12 COVTYPE=diag PCAVAR=0.99 OMP_NUM_THREADS=16 MKL_NUM_THREADS=16"
+
+queue DMODEL in (256)

@@ -1,0 +1,59 @@
+# ================================
+# Condor: can a lower-dimensional projection rescue the mixture at d=256?
+#   condor_submit scripts/xai/submit/select_k_v4_pca_aggressive.sub
+#
+# d=256 is settled as the encoder: it is the best detector by a wide margin
+# (AUC 0.9823 +- 0.0042 on HH->4b against 0.9373 +- 0.0123 at d64, ~3.5 sigma),
+# so the interpretation has to live there. What is not settled is whether the
+# GMM has to see all 256 dimensions. It does not: the AE — and therefore the
+# anomaly score and every AD number in the paper — is trained on the full
+# embedding, and only the clustering step is projected. Reducing the dimension
+# here changes the interpretation's resolution, never the detector.
+#
+# The v3 PCA run tested a 0.99 variance target, which was the wrong knob: VCReg's
+# variance term keeps the spectrum nearly flat, so 0.99 left 209 of 256 dimensions
+# — an 18% cut that kept the conditioning problem intact — and the ARI got worse
+# at every K (0.55-0.65 against 0.60-0.72 unprojected).
+#
+# Two effects are confounded in that result and this grid separates them. The
+# projection truncates, which should help a mixture by improving conditioning, and
+# it rotates onto principal axes, which need not help at all: a diagonal
+# covariance is not rotation-invariant, and the v3 result says the embedding's own
+# axes suit it better than principal ones do. At 209 dimensions truncation is
+# negligible, so v3 measured the rotation penalty almost alone. Scanning 16/32/64
+# lets truncation grow until it either overcomes that penalty or does not.
+#
+# Read the outcome as: ARI rising towards 0.80 as dimensions fall means the low
+# stability was conditioning and a defensible K exists in the projected space,
+# with full covariance affordable again as a bonus. ARI flat or falling means the
+# ambiguity is in the geometry itself, not in the dimension count, and the K-as-
+# resolution argument stands on its own — a clean negative result either way.
+#
+# Same grid, restarts and n_init as the unprojected d256 run, so all five points
+# (16, 32, 64, 209, 256) are directly comparable.
+# ================================
+
+executable = scripts/xai/submit/wrapper_select_k_v2.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/select_k_v4_d256_pca$(PCADIM)_$(ClusterId).out
+error   = $(log_dir)/select_k_v4_d256_pca$(PCADIM)_$(ClusterId).err
+log     = $(log_dir)/select_k_v4_d256_pca$(PCADIM)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "nextweek"
+getenv         = True
+# Deliberately below the v3 runs' 16 CPU / 64 GB. That request is rounded up to
+# 24 CPU / 66 GB and routed to the `bigmcore` hostgroup, which has 10 slots in the
+# whole pool and rarely a free one — the v3 PCA job sat idle for 7 hours before
+# matching. Nothing here needs it: the GMM runs on at most 64 dimensions, and the
+# only heavy step is the PCA fit itself (1.15M x 256, a few GB peak).
+request_cpus   = 8
+request_memory = 24576
+
+SEED   = 3
+DMODEL = 256
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) NRESTARTS=12 COVTYPE=diag PCAVAR=$(PCADIM) OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue PCADIM in (16 32 64)

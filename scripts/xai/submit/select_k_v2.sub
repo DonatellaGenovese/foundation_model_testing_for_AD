@@ -1,0 +1,27 @@
+# ================================
+# Condor: interpretability-oriented K selection, one job per d_model.
+#   condor_submit scripts/xai/submit/select_k_v2.sub
+#
+# Fits at production settings (n_init=5, full SM train), so the stability it
+# reports is that of the mixture actually used — unlike step 01, which measures
+# ARI at n_init=1. CPU only; the heaviest cell is ~5 min per fit on d256.
+# ================================
+
+executable = scripts/xai/submit/wrapper_select_k_v2.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/select_k_v2_d$(DMODEL)_seed$(SEED)_$(ClusterId).out
+error   = $(log_dir)/select_k_v2_d$(DMODEL)_seed$(SEED)_$(ClusterId).err
+log     = $(log_dir)/select_k_v2_d$(DMODEL)_seed$(SEED)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "nextweek"
+getenv         = True
+request_cpus   = 16
+request_memory = 65536
+
+SEED = 3
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) OMP_NUM_THREADS=16 MKL_NUM_THREADS=16"
+
+queue DMODEL in (256 128 64)

@@ -1,0 +1,38 @@
+# ================================
+# Condor: anomaly detection on additional signal proxies (inference only).
+#   condor_submit scripts/xai/submit/newsig.sub
+#
+# One job per (model, d_model), five encoder seeds looped inside each: 12 jobs,
+# 60 evaluations. Nothing is trained — the encoders, the autoencoders and the
+# val-calibrated thresholds all already exist.
+#
+# The shared dataset must exist before submitting: it is built by the first job
+# to run, and concurrent jobs would race on the same tree. It was created by
+# cluster 9473324; the wrapper checks for 6/6 preprocessed classes and only
+# rebuilds if they are missing.
+# ================================
+
+executable = scripts/xai/submit/wrapper_newsig.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/newsig_$(MODEL)_d$(DMODEL)_$(ClusterId).out
+error   = $(log_dir)/newsig_$(MODEL)_d$(DMODEL)_$(ClusterId).err
+log     = $(log_dir)/newsig_$(MODEL)_d$(DMODEL)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_gpus   = 1
+request_memory = 32768
+Requirements   = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "MODEL=$(MODEL) DMODEL=$(DMODEL) OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue MODEL, DMODEL from (
+  vicreg, 32
+  vicreg, 64
+  vicreg, 128
+  vicreg, 256
+)

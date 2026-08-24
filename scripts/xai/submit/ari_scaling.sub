@@ -1,0 +1,27 @@
+# ================================
+# Condor: does more data (or the right n_init) fix the low ARI?
+#   condor_submit scripts/xai/submit/ari_scaling.sub
+#
+# Separates the two candidate causes of step 01's sub-threshold ARI: sample size
+# (200k of ~1.15M SM train used) and the n_init mismatch (step 01 measures ARI
+# at n_init=1, step 02 fits production at n_init=5). CPU only.
+# ================================
+
+executable = scripts/xai/submit/wrapper_ari_scaling.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/ari_scaling_d$(DMODEL)_seed$(SEED)_$(ClusterId).out
+error   = $(log_dir)/ari_scaling_d$(DMODEL)_seed$(SEED)_$(ClusterId).err
+log     = $(log_dir)/ari_scaling_d$(DMODEL)_seed$(SEED)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "nextweek"
+getenv         = True
+request_cpus   = 16
+request_memory = 65536
+
+SEED = 3
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) OMP_NUM_THREADS=16 MKL_NUM_THREADS=16"
+
+queue DMODEL in (256 128)

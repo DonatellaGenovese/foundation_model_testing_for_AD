@@ -1,0 +1,34 @@
+# ================================
+# Condor: K selection, fine grid at higher precision.
+#   condor_submit scripts/xai/submit/select_k_v3.sub
+#
+# Changes from v2: K runs 5..12 in unit steps rather than every other value, and
+# the ARI is averaged over 66 pairs (12 restarts) instead of 15 (6), which roughly
+# halves its uncertainty. v2 left d128 undecidable — 0.782 +- 0.165 against a 0.80
+# threshold says nothing — and that is what this run is for.
+#
+# Diagonal covariance throughout: VCReg's covariance term decorrelates the
+# embedding dimensions, so a diagonal mixture matches the geometry the training
+# objective builds. Whether local (per-component) correlations survive that global
+# decorrelation is tested separately in select_k_v3_full.sub, at d64 where a full
+# covariance is affordable.
+# ================================
+
+executable = scripts/xai/submit/wrapper_select_k_v2.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/select_k_v3_d$(DMODEL)_diag_$(ClusterId).out
+error   = $(log_dir)/select_k_v3_d$(DMODEL)_diag_$(ClusterId).err
+log     = $(log_dir)/select_k_v3_d$(DMODEL)_diag_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "nextweek"
+getenv         = True
+request_cpus   = 16
+request_memory = 65536
+
+SEED = 3
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) NRESTARTS=12 COVTYPE=diag OMP_NUM_THREADS=16 MKL_NUM_THREADS=16"
+
+queue DMODEL in (256 128 64)

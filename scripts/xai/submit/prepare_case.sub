@@ -1,0 +1,27 @@
+# ================================
+# Condor: build the CASE held-out-signal dataset.
+#   condor_submit scripts/xai/submit/prepare_case.sub
+#
+# Vectorises the seven CASE processes plus QCD_inclusive and applies the SM-only
+# normalisation in apply_only mode, so the signals land on the scale the encoder was
+# trained with without ever contributing to it. Resources stay well below the
+# bigmcore threshold (16 CPU / 64 GB), which routes to a 10-slot partition.
+# ================================
+
+executable = scripts/xai/submit/wrapper_prepare_case.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/prepare_case_$(ClusterId).out
+error   = $(log_dir)/prepare_case_$(ClusterId).err
+log     = $(log_dir)/prepare_case_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_memory = 32768
+
+environment = "OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue

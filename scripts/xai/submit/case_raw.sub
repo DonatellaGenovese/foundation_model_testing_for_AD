@@ -1,0 +1,32 @@
+# ================================
+# Condor: raw-feature autoencoder baseline on the CASE held-out signals.
+#   condor_submit scripts/xai/submit/case_raw.sub
+#
+# The learned-embedding rows of the CASE table have no baseline without this: the
+# question the paper asks is whether a learned representation buys anything over the
+# preprocessed kinematics, and that needs the same events scored both ways.
+#
+# Strategy mse_qcd — the AE trained on QCD raw features alone, the one that
+# reproduces the published Raw AE row. Inference only: the operating threshold is the
+# val-calibrated value stored in the checkpoint.
+#
+# CPU is enough; the AE is a small MLP over 340 features and nothing is trained.
+# ================================
+
+executable = scripts/xai/submit/wrapper_case_raw.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/case_raw_$(ClusterId).out
+error   = $(log_dir)/case_raw_$(ClusterId).err
+log     = $(log_dir)/case_raw_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_memory = 24576
+
+environment = "OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue

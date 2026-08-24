@@ -155,7 +155,14 @@ configs/local/default.yaml
 
 # Ignore output plots
 plots/
+# Kerberos credential caches. These are NOT source files: a stray `kinit` or job
+# wrapper writes the ticket cache into the cwd, which here is the repo root. They hold
+# live service tickets for CERN.CH, AFS and EOS, so they must never be committed.
 phploner.cc
+dgenoves.cc
+**/dgenoves.cc
+*.krb5cc
+krb5cc_*
 
 
 fm_testing.sif
@@ -178,3 +185,10 @@ notebooks/top_models/top1.ckpt
 notebooks/top_models/top2_preds.npz
 notebooks/top_models/top2_roc.png
 notebooks/top_models/top2.ckpt
+
+# Paper build products. Figures, LaTeX fragments and PDFs are outputs, regenerable
+# from the scripts below and from the CSVs on EOS, so they stay out of the history.
+# The generators themselves are code and remain tracked.
+paper/**
+!paper/**/
+!paper/**/*.py

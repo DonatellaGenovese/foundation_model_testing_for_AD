@@ -1,0 +1,50 @@
+# ================================
+# Condor: anomaly detection on the CASE held-out signals.
+#   condor_submit scripts/xai/submit/case_ad.sub
+#
+# One job per (model, d_model); the five encoder seeds are looped inside. Inference
+# only — nothing is trained and no threshold is recalibrated, so these processes are
+# held out in the strongest sense: absent from training, from the normalisation fit,
+# and from the threshold calibration.
+#
+# The dataset must already exist (scripts/prepare_case_smnorm.py); the wrapper fails
+# fast if fewer than 8 classes are present rather than producing partial results.
+# ================================
+
+executable = scripts/xai/submit/wrapper_case.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/case_ad_$(MODEL)_d$(DMODEL)_$(ClusterId).out
+error   = $(log_dir)/case_ad_$(MODEL)_d$(DMODEL)_$(ClusterId).err
+log     = $(log_dir)/case_ad_$(MODEL)_d$(DMODEL)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_gpus   = 1
+request_memory = 32768
+
+Requirements   = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "MODEL=$(MODEL) DMODEL=$(DMODEL) OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue MODEL, DMODEL from (
+  vcreg,  32
+  vcreg,  64
+  vcreg,  128
+  vcreg,  256
+  supcon, 32
+  supcon, 64
+  supcon, 128
+  supcon, 256
+  simclr, 32
+  simclr, 64
+  simclr, 128
+  simclr, 256
+  vicreg, 32
+  vicreg, 64
+  vicreg, 128
+  vicreg, 256
+)

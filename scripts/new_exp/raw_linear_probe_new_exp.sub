@@ -15,8 +15,8 @@ output  = $(log_dir)/raw_linear_probe_$(ClusterId).out
 error   = $(log_dir)/raw_linear_probe_$(ClusterId).err
 log     = $(log_dir)/raw_linear_probe_$(ClusterId).log
 
-stream_output = True
-stream_error  = True
+# No stream_output/stream_error: the CERN schedd rejects the submission outright
+# since Nov 2025.
 
 run_as_owner = True
 +JobFlavour  = "tomorrow"

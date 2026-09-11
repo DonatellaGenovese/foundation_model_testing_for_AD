@@ -16,8 +16,13 @@ WRAPPER     = PROJECT_DIR / "src/wrapper_encoder_seeds_anomaly.sh"
 LOG_DIR     = PROJECT_DIR / "logs/condor_logs/new_exp/ad"
 EOS_NEW     = "/eos/user/d/dgenoves/anomaly_pipeline/new_exp"
 
-# VCReg-aligned seed set (12345 replaces 137)
-SEEDS   = "7,42,12345,1337,31337"
+# Seed sets differ per campaign -- the same table as submit_training_new_exp.py and
+# submit_eval_probes_new_exp.py. A single default used to serve every model: right for
+# VICReg only, one seed off for SupCon and SimCLR (12345 where their encoders have
+# 137), and none of VCReg's (0-4) at all, so the paper's main encoder was not rerun.
+SEEDS         = "7,42,12345,1337,31337"   # VICReg, and the fallback
+SEEDS_137     = "7,42,137,1337,31337"     # SupCon, SimCLR
+SEEDS_LEGACY  = "0,1,2,3,4"               # VCReg
 AE_SEED = 42
 DMODELS = [32, 64, 128, 256]
 
@@ -26,6 +31,7 @@ MODELS = {
     "simclr": {
         "phase2":  "new_exp/anomaly_embedding_simclr",
         "run_dir": "simclr_12class_nosparse_dmodel{dm}_cern",
+        "seeds":   SEEDS_137,
     },
     "vicreg_physics": {
         "phase2":  "new_exp/anomaly_embedding_vicreg",
@@ -73,10 +79,12 @@ MODELS = {
     "supcon": {
         "phase2":  "new_exp/anomaly_embedding_supcon",
         "run_dir": "supcon_12class_nosparse_dmodel{dm}_cern",
+        "seeds":   SEEDS_137,
     },
     "vcreg": {
         "phase2":  "new_exp/anomaly_embedding_vcreg",
         "run_dir": "vcreg_12class_nosparse_dmodel{dm}_cern",
+        "seeds":   SEEDS_LEGACY,
     },
     # Pilot: lr=1.5e-4, ckpt val/acc (d128 only — ignore --dmodels for other dims)
     "vcreg_lr1p5e4_acc": {
@@ -112,7 +120,7 @@ def submit_job(model: str, dm: int, seeds: str, dry_run: bool = False, smnorm: b
     out_dir = f"{EOS_NEW}/ad_results/{run_dir}"
 
     job_name = f"ad_{run_dir}"
-    if seeds != SEEDS:
+    if seeds != MODELS[model].get("seeds", SEEDS):
         job_name = f"{job_name}_seeds{seeds.replace(',', '-')}"
 
     sub_content = f"""\
@@ -163,8 +171,9 @@ def main():
     parser.add_argument("--dmodels", nargs="+", type=int, default=None)
     parser.add_argument(
         "--seeds",
-        default=SEEDS,
-        help="Comma-separated encoder seeds (default: all five)",
+        default=None,
+        help="Comma-separated encoder seeds. Default: the set that produced each "
+             "model's published encoders (they differ per model).",
     )
     parser.add_argument(
         "--smnorm",
@@ -190,12 +199,14 @@ def main():
     total = sum(len(dmodels_by_model[m]) for m in models)
     print(f"{'DRY RUN — ' if args.dry_run else ''}Submitting {total} AD jobs")
     print(f"Models  : {models}")
-    print(f"Seeds   : {args.seeds}  (AE seed fixed: {AE_SEED})")
+    print(f"Seeds   : {args.seeds or 'per model'}  (AE seed fixed: {AE_SEED})")
     print(f"Output  : {EOS_NEW}/ad_results/<run_dir>/\n")
 
     for model in models:
+        seeds = args.seeds or MODELS[model].get("seeds", SEEDS)
+        print(f"[{model}] seeds={seeds}")
         for dm in dmodels_by_model[model]:
-            submit_job(model, dm, seeds=args.seeds, dry_run=args.dry_run, smnorm=args.smnorm)
+            submit_job(model, dm, seeds=seeds, dry_run=args.dry_run, smnorm=args.smnorm)
 
     print(f"\nDone. {total} jobs {'(dry-run)' if args.dry_run else 'submitted'}.")
 

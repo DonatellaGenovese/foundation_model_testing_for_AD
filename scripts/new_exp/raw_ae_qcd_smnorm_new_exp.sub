@@ -1,11 +1,12 @@
 # ================================
-# Condor: raw AE Case 3 — QCD-only training (new_exp, 5 seeds)
-# Config: anomaly_qcd_vs_higgs_raw_nosparse_cern
-# Data:   v2_nosparse_higgs_smstats_highlevel
+# Condor: raw AE Case 3 — QCD-only training (new_exp, 5 seeds). The published Raw AE
+# row; strategy mse_qcd.
+# Config: anomaly_qcd_vs_higgs_raw_smnorm_nosparse_cern
+# Data:   v2_nosparse_higgs_smnorm_highlevel (SM-only normalisation)
 # Output: /eos/.../anomaly_pipeline/new_exp/ad_results/raw/
 #
 # Usage:
-#   condor_submit scripts/new_exp/raw_ae_qcd_new_exp.sub
+#   condor_submit scripts/new_exp/raw_ae_qcd_smnorm_new_exp.sub
 # ================================
 
 executable = scripts/new_exp/wrapper_raw_ae_new_exp.sh
@@ -16,8 +17,8 @@ output  = $(log_dir)/raw_ae_qcd_$(ClusterId).out
 error   = $(log_dir)/raw_ae_qcd_$(ClusterId).err
 log     = $(log_dir)/raw_ae_qcd_$(ClusterId).log
 
-stream_output = True
-stream_error  = True
+# No stream_output/stream_error: the CERN schedd rejects the submission outright
+# since Nov 2025.
 
 run_as_owner = True
 +JobFlavour  = "nextweek"

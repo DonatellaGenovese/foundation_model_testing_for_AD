@@ -922,7 +922,6 @@ def main(cfg: DictConfig) -> None:
         raise RuntimeError(f"Could not load checkpoint {ckpt_path}. Errors: {error_summary}")
 
     model.eval()
-    torch.save(model.encoder.state_dict(), "encoder_eval.pth")
     
     # Setup datamodule
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")

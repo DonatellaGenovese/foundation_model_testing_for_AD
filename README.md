@@ -11,13 +11,7 @@
 
 ## About
 
-Code for the paper *Explaining Anomalies in Collider Data via Learned Latent
-Representations*. Transformer encoders are trained on 12 Standard-Model process
-classes from COLLIDE-2V under four objectives (SupCon, SimCLR, VCReg, VICReg); the
-embeddings are frozen and a small autoencoder is trained on them, on QCD only, to flag
-signal processes as anomalies. A Gaussian mixture fitted on the SM latent space is
-then used to interpret *why* an event was flagged, by comparing flagged events with
-their local SM neighbourhood in physics space.
+Code for the paper *Diagnosing Learned Event Representations for Anomaly Detection in High-Luminosity LHC Searches*. Transformer encoders are trained on 12 Standard-Model process classes from COLLIDE-2V under four objectives (SupCon, SimCLR, VCReg, VICReg); the embeddings are frozen and a small autoencoder is trained on them, on QCD only, to flag signal processes as anomalies. A Gaussian mixture fitted on the SM latent space is then used to interpret *why* an event was flagged, by comparing flagged events with their local SM neighbourhood in physics space.
 
 Built on the data-loading and Lightning-Hydra scaffolding of
 [pploner/foundation_model_testing](https://github.com/pploner/foundation_model_testing),
@@ -29,7 +23,7 @@ was set aside.
 ## Installation
 
 ```bash
-git clone https://github.com/dgenoves/foundation_model_testing_for_AD.git
+git clone https://github.com/DonatellaGenovese/foundation_model_testing_for_AD.git
 cd foundation_model_testing_for_AD
 apptainer build fm_testing.sif fm_testing.def
 ```
@@ -38,7 +32,7 @@ Behaviour is controlled through the Hydra configs in `configs/`; set defaults th
 and override only what changes in a `configs/experiment/*.yaml`.
 
 Every submitter below accepts `--dry-run`, which prints what would be submitted
-without touching the queue. **Use it first** — a full sweep is 20 GPU jobs.
+without touching the queue. **Use it first** (a full sweep is 20 GPU jobs.)
 
 ---
 
@@ -50,9 +44,7 @@ which this repository is built on. Transforms and normalisers are unchanged from
 
 Vectorisation reads the source `.parquet`, keeps the top-k objects per group (12 jets,
 8 electrons/muons/photons), zero-pads to a fixed length and appends each group's true
-multiplicity as a trailing scalar. Preprocessing then transforms and normalises the
-result. Output goes to `<label>/vectorized/` and `<label>/preprocessed/`; **a different
-set of options needs a different `label`**, or the existing tree is reused unchanged.
+multiplicity as a trailing scalar. Preprocessing then transforms and normalises the result. Output goes to `<label>/vectorized/` and `<label>/preprocessed/`; **a different set of options needs a different `label`**, or the existing tree is reused unchanged.
 
 ### Preprocessing for pretraining and probe evaluation
 
@@ -78,29 +70,16 @@ The filter drops events in which every jet, electron, muon and photon slot has `
 This stage fits the normalisation statistics median and IQR per feature group and writes them to `<label>/preprocessed/norm_stats.json`. Everything downstream reuses
 that file.
 
-### Proxy signals and CASE signals
+### Held-out signals
 
-These are normalised with the statistics fitted above, never their own: a signal that
-helped set the scale would be measured against a scale it had already shifted.
+The held-out processes are normalised with the statistics fitted above.
 
 ```bash
-python scripts/preprocess_smnorm.py        # 12 SM + 3 Higgs proxies
-python scripts/prepare_newsig_smnorm.py    # QCD + 5 further proxies
-python scripts/prepare_case_smnorm.py      # QCD + 7 CASE signals
-
-# without the empty-event filter (writes to a `sparse` label instead)
-python scripts/prepare_newsig_smnorm.py --keep-empty
-python scripts/prepare_case_smnorm.py --keep-empty
+python scripts/preprocess_smnorm.py        # 12 SM + VBF H->bb, HH->4b, ggH->tautau
+python scripts/prepare_newsig_smnorm.py    # QCD + HH->bbtautau
+python scripts/prepare_case_smnorm.py      # QCD + H->aa->4b, H->aa->4tau, Z'->n(mumu)
 ```
 
-Each copies the SM-only `norm_stats.json` into its output directory, runs the
-preprocessing with `mode: apply_only` and `force: true`, then re-reads the file and
-exits non-zero if `num_examples_fit` changed — the only way `apply_only` could fail
-silently. `force` is needed because the stage otherwise skips when statistics are
-already present; here they are the input, not the result.
-
-`preprocess_smnorm.py` has no `--keep-empty`: it reuses an already vectorised tree and
-only applies the statistics.
 
 To do the same by hand for a new sample:
 
@@ -110,12 +89,7 @@ python scripts/submit_preprocessing_jobs.py experiment=<experiment> \
     preprocess.mode=apply_only preprocess.force=true
 ```
 
-> **TODO — the signal datasets must be rebuilt.** `newsig` and `case` currently hold
-> every process that was tried, not the ones that end up in the paper. Rebuild both
-> with the final selection before release, so the published datasets match the
-> published tables.
-
-If the source production changes, rescan the event map first —
+If the source production changes, rescan the event map first:
 `has_enough_events` raises on a file it cannot look up:
 
 ```bash
@@ -130,44 +104,13 @@ Four encoders plus the supervised baseline, each over `d_model ∈ {32, 64, 128,
 and 5 seeds.
 
 ```bash
-# everything the paper reports
+# all the training together 
 python scripts/new_exp/submit_training_new_exp.py \
     --models supcon simclr vcreg vicreg ce
 
-# one model, one dimension
+# to select one model and dimension 
 python scripts/new_exp/submit_training_new_exp.py --models vcreg --dmodels 256
 ```
-
-**The five rows do not share a seed set or a config namespace.** They were trained in
-two campaigns and the submitter now carries the right pairing per model, so the
-command above reproduces the published encoders — but do not pass a global `--seeds`
-expecting it to.
-
-| `--models` | paper row | config | seeds |
-|---|---|---|---|
-| `supcon` | SupCon | `new_exp/supcon_dmodel{d}` | 7, 42, 137, 1337, 31337 |
-| `simclr` | SimCLR | `new_exp/simclr_dmodel{d}` | 7, 42, 137, 1337, 31337 |
-| `vicreg` | VICReg | `new_exp/vicreg_dmodel{d}` | 7, 42, 12345, 1337, 31337 |
-| `vcreg` | VCReg | `vcreg_12class_nosparse_dmodel{d}_cern` | 0, 1, 2, 3, 4 |
-| `ce` | CE baseline | `fm_testing_12class_nosparse_dmodel{d}_cern` | 0, 1, 2, 3, 4 |
-
-VCReg and CE come from the earlier campaign, which is why their configs sit outside
-`new_exp/`. This is verifiable rather than a naming accident: their published
-checkpoints under `new_exp/<run_dir>/seed_{0..4}` are byte-identical to
-`anomaly_pipeline/encoder_seeds/`, and their `config_tree.log` records lr 1.5e-4,
-wd 5e-4, 50 epochs and checkpointing on `val/acc` — the settings of the older config,
-not of `new_exp/vcreg_dmodel{d}`. That newer VCReg recipe was trained and set aside;
-its encoders are in `new_exp/archive_vcreg_20260728/` and its configs in
-`archive/configs/experiment_new_exp/`.
-
-VCReg d256 is the encoder the interpretability stage runs on, so this is the pairing
-that matters most.
-
-The remaining registry entries are the VICReg augmentation arms, kept for provenance.
-
-
-The raw-feature baselines need no training — the autoencoder and the linear probe are
-fitted directly on the preprocessed kinematics in stage 3.
 
 A single run without the submitter:
 
@@ -190,18 +133,17 @@ condor_submit scripts/new_exp/raw_linear_probe_new_exp.sub    # raw-feature base
 
 One linear layer on the frozen embeddings; per-class and macro AUROC, aggregated over
 seeds into `aggregated_summary.json`. CE is not probed — being a classifier, its
-per-class AUROC comes from its own test predictions.
+per-class AUROC comes from its own test predictions, which training writes to
+`seed_*/test_predictions/test_logits_and_labels.npz`:
 
-> The probe is **not** a reliable proxy for anomaly detection. Two independent
-> measurements here move the two metrics in opposite directions — SimCLR's temperature
-> and VICReg's `d_model` — so a configuration selected by probe AUROC can be worse at
-> the task the paper reports.
+```bash
+python scripts/aggregate_ce_auroc.py    # CE rows of Tables 4 and 8
+```
 
 ### Anomaly detection, proxy signals
 
 The autoencoder is trained on QCD only and scored by reconstruction MSE. The operating
-threshold is calibrated on validation and stored in the checkpoint, so every later
-evaluation transfers it rather than recomputing it.
+threshold is calibrated on validation and stored in the checkpoint.
 
 ```bash
 # embedding-based, all models — VBF H->bb, HH->4b, ggH->tautau
@@ -211,8 +153,11 @@ python scripts/new_exp/submit_ad_new_exp.py --smnorm \
 # raw-feature baseline (strategy mse_qcd is the published row)
 condor_submit scripts/new_exp/raw_ae_qcd_smnorm_new_exp.sub
 
-# four further proxies — HH->bbtautau, VVV, VH, tttt
-condor_submit scripts/xai/submit/newsig.sub
+# further proxy — HH->bbtautau; build its dataset first, or the jobs race to build it
+python scripts/prepare_newsig_smnorm.py
+condor_submit scripts/xai/submit/newsig.sub          # VCReg, SupCon, SimCLR
+condor_submit scripts/xai/submit/newsig_vicreg.sub   # VICReg
+condor_submit scripts/xai/submit/newsig_raw.sub      # raw-feature baseline
 ```
 
 ### Anomaly detection, CASE signals
@@ -229,77 +174,155 @@ Check the measured false-positive rate on QCD in the output: it confirms the
 transferred threshold still lands where it should — 0.096 ± 0.004 against a nominal
 0.10 on the CASE production, 0.090 ± 0.002 for the raw baseline.
 
-
-(TODO: sistemare i segnali che usiamo nel paper)
-
 ---
 
 ## 4. Interpretability
 
-Six steps in `scripts/xai/`. The autoencoder flags; the mixture only interprets, and
-is never used as an anomaly score.
+The autoencoder flags; the mixture only interprets, and is never used as an anomaly
+score. The whole stage runs on one encoder — VCReg, `d_model = 256`, seed 3 and one
+mixture: K = 7, diagonal covariance, fitted on a 64-dimensional PCA of the SM training
+embeddings. The autoencoder is the stage-3 one and keeps scoring the full 256-dim
+embedding; only the partition is projected.
 
-| Step | Script | Output |
-|---|---|---|
-| 1 | `01_select_k.py` | BIC/ARI scan |
-| 2 | `02_fit_gmm.py` | `gmm_K{k}.pkl` |
-| 3 | `03_assign_flagged.py` | flag rate per component (QCD / non-QCD SM / signal) |
-| 4 | `04_profile_and_rank.py` | physics profile per component, Wasserstein ranking |
-| 5 | `05_robustness_kpm2.py` | stability at K ± 2 |
-| 6 | `06_ae_mechanism.py` | per-dimension AE residual vs. the ranked observable |
+The two signals interpreted are HH→4b (label 13) and Z′→n(μμ) (label 20, from the CASE production of stage 1). Run the steps in this order; the paths are those of the
+paper's runs, so change `NE`, `XP` and `FMD` to your own.
+
+[`notebooks/xai_reproduce_load.ipynb`](notebooks/xai_reproduce_load.ipynb) loads the saved
+embeddings (step 1) and K = 7 mixture (step 3), runs steps 2 and 5–7 into a separate
+output tree, then checks every number against the value printed in the paper. Its
+inputs (about 4 GB) are shared from CERNBox: `bash scripts/download_xai_data.sh`
+downloads, verifies and unpacks them into `data/`, where the notebook looks for them.
 
 ```bash
-condor_submit scripts/xai/submit/xai_full.sub     # HH->4b, end to end
-condor_submit scripts/xai/submit/xai_case.sub     # a CASE signal, step 4 only
+NE=/eos/user/d/dgenoves/anomaly_pipeline/new_exp
+XP=/eos/user/d/dgenoves/anomaly_pipeline/xai_paper
+FMD=/eos/user/d/dgenoves/foundation_model_testing_data
+RUN=vcreg_12class_nosparse_dmodel256_cern
+EMB=$NE/xai_embeddings_smnorm/$RUN/encoder_seed_3/embeddings
+ENC=$NE/$RUN/seed_3/checkpoints/epoch_014.ckpt
+AE=$NE/ad_results/$RUN/encoder_seed_3/mse_normal/checkpoints/ae-epochepoch=49.ckpt
+GMM=$XP/k_selection_v3/vcreg_d256_seed3_diag_pca64/gmm_K7.pkl
+MH=$XP/vcreg_d256_seed3_smnorm/04_profile/matched_sm_hh4b.npz
+MV=$XP/case_HVdilep_Zp1000_piD2_mumu_d256_seed3/matched_sm_HVdilep_Zp1000_piD2_mumu.npz
+PCA="--pca-dim 64 --pca-embeddings-dir $EMB --pca-seed 3"
 ```
 
-Two choices govern this stage, and neither follows the criterion stated in earlier
-drafts.
+**1. Embeddings of the 12 SM classes and the signals.** The AD runs only embed QCD and the signals, so the mixture needs its own extraction (only `DMODEL=256` is used):
 
-**The mixture is fitted on a 64-dimensional PCA of the embedding, not on all 256.**
-The autoencoder keeps scoring the full embedding, so no anomaly score changes; only
-the partition is projected. In the unprojected space no K between 3 and 12 gives a
-partition whose components are all populated — even at K=3 one component holds 4% of
-the uniform share — whereas at 64 dimensions occupancy is monotone in K.
+```bash
+condor_submit scripts/xai/submit/extract_xai_emb.sub
+```
 
-**K = 7 comes from the criterion in `select_k_profiles.py`**: the finest partition
-whose components are all populated and none of which are duplicates, the duplicate
-test calibrated by permutation rather than against a fixed distance. BIC decreases
-monotonically over the whole range in every space measured and never selects; ARI
-never reaches 0.8 in the unprojected space, so the threshold quoted in earlier drafts
-is unattainable there.
+**2. Matched array** — SM and HH→4b test events with their embedding and physics
+observables, the population every later step profiles:
 
-`select_k_interpretable.py` runs the earlier ARI/BIC/profile-distance scan, kept
-because the PCA comparison in the appendix comes from it.
+```bash
+python scripts/xai/04_profile_and_rank.py --ckpt-path $ENC --signal-label 13 \
+    --vectorized-dir $FMD/v2_nosparse_higgs_allsm_highlevel/vectorized/test \
+    --preproc-split-dir $FMD/v2_nosparse_higgs_smnorm_highlevel/preprocessed/test \
+    --save-matched $MH --output-dir $(dirname $MH)
+```
+
+Without `--gmm-path` the script stops once the array is saved: the array does not
+depend on the mixture, and step 3 needs it to fit one.
+
+**3. Mixtures.** `select_k_interpretable.py` fits K = 5…12 in each space:
+
+```bash
+condor_submit scripts/xai/submit/select_k_v4_pca_aggressive.sub  # PCA 64 -> gmm_K7.pkl (16, 32 unused)
+condor_submit scripts/xai/submit/select_k_v3.sub                 # unprojected, for the comparison (256 only)
+```
+
+**4. Choice of K** (Appendix A.4). `select_k_profiles.py` reuses the mixtures above,
+fits K = 3, 4 itself, and records the occupancy of each component:
+
+```bash
+condor_submit scripts/xai/submit/select_k_profiles.sub   # unprojected and PCA 64
+python paper/figures/make_k_occupancy.py                 # k_occupancy.pdf
+```
+
+A component is populated if it holds at least `max(200, 0.2 N_SM / K)` events. In PCA
+64 every component is populated up to K = 7 and not beyond, so K = 7 is the finest
+usable partition; in the unprojected space no K in 3–12 qualifies. The script also
+tests for duplicate components, but no pair is flagged at any K, so occupancy alone
+decides.
+
+**5. Matched array for Z′→n(μμ)** — the CASE signal events next to the same SM block:
+
+```bash
+python scripts/xai/build_matched_case.py --case-label HVdilep_Zp1000_piD2_mumu \
+    --signal-label 20 --sm-matched $MH --ckpt $ENC --output $MV
+```
+
+**6. Steps 03–06, per signal:**
+
+| Step | Script | Output | Used for |
+|---|---|---|---|
+| 03 | `03_assign_flagged.py` | `k7_<sig>_pca64_d256_seed3/03_assign_matched/` | localisation, top-observable, the Fig. 2 assignments |
+| 04 | `04_profile_and_rank.py` | `rank_k7_sm/<sig>/` | Table 6, per-component distributions |
+| 05 | `05_robustness_kpm2.py` | `k7_<sig>_pca64_d256_seed3/05_robustness/` | the K ± 2 check of Appendix A.4 |
+| 06 | `06_ae_mechanism.py` | `k7_<sig>_pca64_d256_seed3/06_ae_mechanism/` | Spearman figures |
+
+```bash
+for spec in "hh4b 13 $MH" "hvdilep 20 $MV"; do
+  read t S M <<< "$spec"
+  K7=$XP/k7_${t}_pca64_d256_seed3
+  python scripts/xai/03_assign_flagged.py --matched-npz $M --signal-label $S \
+      --gmm-path $GMM --ae-checkpoint $AE --output-dir $K7/03_assign_matched \
+      --fpr 0.10 --ylim 0.95 $PCA
+  python scripts/xai/04_profile_and_rank.py --matched-npz $M --signal-label $S \
+      --gmm-path $GMM --ae-checkpoint $AE --output-dir $XP/rank_k7_sm/$t \
+      --min-frac 0.05 --fpr 0.10 $PCA
+  python scripts/xai/05_robustness_kpm2.py --embeddings-dir $EMB --matched-npz $M \
+      --signal-label $S --ae-checkpoint $AE --k 7 --gmm-dir $(dirname $GMM) \
+      --output-dir $K7/05_robustness --fpr 0.10 --min-frac 0.05 $PCA
+  python scripts/xai/06_ae_mechanism.py --matched-npz $M --gmm-path $GMM \
+      --ae-checkpoint $AE --profile-meta $XP/rank_k7_sm/$t/profile_meta.json \
+      --output-dir $K7/06_ae_mechanism $PCA
+done
+```
+
+**7. Figures and tables of the paper:**
+
+```bash
+R=$XP/rank_k7_sm; D=paper/figures/xai
+H=$XP/k7_hh4b_pca64_d256_seed3; V=$XP/k7_hvdilep_pca64_d256_seed3
+
+# Fig. 2, component profiles (the script reads <run-dir>/04_profile/)
+mkdir -p $R/hh4b/04_profile
+cp $R/hh4b/profile_meta.json $R/hh4b/04_profile/
+ln -sf $MH $R/hh4b/04_profile/matched_sm_hh4b.npz
+python scripts/xai/plot_04_profiles.py --run-dir $R/hh4b \
+    --assignments $H/03_assign_matched/assignments.npz \
+    --mark '$HH \to 4b$:4,5' --mark '$Z^{\prime} \to n(\mu\mu)$:2' \
+    --output $D/component_profiles_K7.pdf
+
+# Spearman (only C2 is shown for Z')
+python scripts/xai/plot_06_convergence.py --run-dir $H --output $D/spearman_hh4b_K7.pdf
+python scripts/xai/plot_06_convergence.py --run-dir $V --components 2 \
+    --output $D/spearman_hvdilep_K7.pdf
+
+# localisation, top observable, Table 6
+cp $H/03_assign_matched/plots/flagged_assignment.pdf $D/localisation_hh4b_K7.pdf
+cp $V/03_assign_matched/plots/flagged_assignment.pdf $D/localisation_hvdilep_K7.pdf
+python paper/figures/make_top_observable.py    # top_observable_K7.pdf
+python paper/make_wasserstein_table.py         # sections/xai/wasserstein_side_by_side.tex
+
+# supplementary: per-component distributions
+cp $R/hh4b/plots/hh4b_vs_sm_k5.pdf              $D/dist8_hh4b_C5_K7.pdf
+cp $R/hh4b/plots/hh4b_vs_sm_k4.pdf              $D/dist8_hh4b_C4_K7.pdf
+cp $R/hvdilep/plots/hv_zp1000_mumu_vs_sm_k2.pdf $D/dist8_hvdilep_C2_K7.pdf
+cp $R/hvdilep/plots/hv_zp1000_mumu_vs_sm_k5.pdf $D/dist8_hvdilep_C5_K7.pdf
+cp $R/hh4b/plots/physics_per_component.pdf      $D/physics_per_component_K7.pdf
+```
 
 ---
 
-## 5. Ablations
-
-The appendix ablations — augmentation strategy, loss hyperparameters, `d_model` — were
-run on a reduced subset of the 12-class dataset. They are separate runs from the
-production ones and the numbers are not interchangeable: different subset, and a
-different backbone (`n_heads=8`, `n_layers=6`).
-
-Their configs and submitters now live in [`archive/ablation/`](archive/README.md), since
-they no longer run as part of any current stage. The results they produced are on EOS
-under `anomaly_pipeline/ablation/<axis>/`. To re-run one, move the axis back into
-`configs/experiment/` and `scripts/`, and note that its submitter still carries the
-`stream_output` lines the CERN schedd now rejects (see stage 1).
-
-What did **not** move is the five shared backbone definitions the ablation happened to
-introduce, now in `configs/experiment/backbone/`: the production SupCon, SimCLR, VICReg
-and probe configs inherit them, so they are part of the live tree despite the name.
-
 ---
 
-## Layout
+## License
 
-```
-configs/experiment/new_exp/   production configs, one per model and d_model
-scripts/new_exp/              submitters for training, probes, anomaly detection
-scripts/xai/                  interpretability pipeline (6 steps) and its submitters
-configs/experiment/backbone/  shared backbone mixins (inherited by production configs)
-src/                          Lightning modules, data and preprocessing
-archive/                      retired code, see archive/README.md
-```
+MIT, see [`LICENSE`](LICENSE). The scaffolding this repository is built on
+([pploner/foundation_model_testing](https://github.com/pploner/foundation_model_testing),
+[lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)) carries
+its own licence.

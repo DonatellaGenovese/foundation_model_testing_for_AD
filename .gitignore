@@ -143,6 +143,9 @@ dmypy.json
 *.h5
 *.tar
 *.tar.gz
+# Model weights: outputs, never source. encoder_eval.pth / encoder_training.pth were
+# tracked by mistake (debug dumps written into the repo root by a probe run).
+*.pth
 
 # Lightning-Hydra-Template
 configs/local/default.yaml
@@ -192,6 +195,9 @@ notebooks/top_models/top2.ckpt
 paper/**
 !paper/**/
 !paper/**/*.py
+
+# Default output tree of notebooks/xai_reproduce.ipynb.
+/outputs/
 
 # Ad-hoc backups left beside the file they shadow (e.g. the event-count index kept
 # from before the CASE folders were scanned in). The live file is tracked; these are not.

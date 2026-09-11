@@ -3,12 +3,12 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="src",
-    version="0.0.1",
-    description="Describe Your Cool Project",
-    author="",
-    author_email="",
-    url="https://github.com/user/project",
+    name="foundation_model_testing_for_AD",
+    version="0.1.0",
+    description="Explaining anomalies in collider data via learned latent representations",
+    author="Donatella Genovese",
+    license="MIT",
+    url="https://github.com/DonatellaGenovese/foundation_model_testing_for_AD",
     install_requires=["lightning", "hydra-core"],
     packages=find_packages(),
     # use this to customize global commands available in the terminal after installing the package

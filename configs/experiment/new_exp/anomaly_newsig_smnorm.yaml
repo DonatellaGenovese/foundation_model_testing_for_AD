@@ -1,6 +1,6 @@
 # @package _global_
 #
-# Additional signal proxies for anomaly detection — SM-only normalisation.
+# Additional held-out proxy (HH->bbtautau) for anomaly detection — SM-only normalisation.
 #
 # Inference only: the encoder and the autoencoder are already trained (the AE on
 # QCD embeddings alone), and the anomaly threshold is the val-calibrated one
@@ -15,7 +15,15 @@
 #
 # Class indices (order of to_classify):
 #   normal   : [0]           — QCD_inclusive, the AE's trained normality
-#   anomaly  : [1,2,3,4,5]   — VVV, VH, tttt, ttH, HH->bbtautau
+#   anomaly  : [1]           — HH->bbtautau
+#
+# WHY THE LABEL IS v3. The v2 tree held six classes -- VVV, VH, tttt and ttH were
+# scored during the study but are not in the paper -- and HH_bbtautau sat at position
+# 5, so its events carry y=5 in every `_y.npy` and every embedding saved from that
+# tree. Here it is position 1. Labels are positions in to_classify, not names, so a
+# v2 file read through this config would report VVV (y=1) as HH_bbtautau, with no
+# error anywhere. A new label keeps the two trees apart, and infer_new_signals.py
+# gives v3 its own embedding and result roots for the same reason.
 #
 # Splits are small because only the test split is used; train/val exist so the
 # datamodule can be built.
@@ -37,21 +45,17 @@ use_projections: false
 tags: ["anomaly_detection", "new_signals", "inference", "cern", "nosparse", "smnorm"]
 
 normal_classes: [0]
-anomaly_classes: [1, 2, 3, 4, 5]
+anomaly_classes: [1]
 
 data:
   batch_size: 512
   train_val_test_split_per_class: [20_000, 20_000, 20_000]
-  label: "v2_nosparse_newsig_smnorm_highlevel"
+  label: "v3_nosparse_newsig_smnorm_highlevel"
   num_workers: 32
 
   to_classify:
     - "QCD_inclusive"     # 0 — normal (AE trained on this)
-    - "VVV"               # 1 — triboson
-    - "VH_incl"           # 2 — V + Higgs
-    - "tttt"              # 3 — four top
-    - "ttH_incl"          # 4 — ttbar + Higgs
-    - "HH_bbtautau"       # 5 — di-Higgs, bb tautau decay
+    - "HH_bbtautau"       # 1 — di-Higgs, bb tautau decay
 
   datasets_config:
     jets:

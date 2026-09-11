@@ -35,13 +35,15 @@ fi
 echo "[$(date)] CASE signals — ${MODEL}, d=${DMODEL}, seeds: ${SEEDS}"
 echo "  host: $(hostname)"
 
+# QCD plus the three CASE signals the paper reports. A tree built before that selection
+# holds eight folders; it is a superset whose kept labels did not move, so it passes.
 n_prep=$(ls -d ${DATA}/preprocessed/test/*/ 2>/dev/null | wc -l)
-if [ "${n_prep}" -lt 8 ]; then
-  echo "MISSING: CASE dataset has ${n_prep}/8 classes under ${DATA}/preprocessed/test"
+if [ "${n_prep}" -lt 4 ]; then
+  echo "MISSING: CASE dataset has ${n_prep}/4 classes under ${DATA}/preprocessed/test"
   echo "Run scripts/prepare_case_smnorm.py first."
   exit 1
 fi
-echo "  dataset: ${n_prep}/8 classes present"
+echo "  dataset: ${n_prep} class folders present (4 needed)"
 
 cd ${PROJECT_DIR}
 

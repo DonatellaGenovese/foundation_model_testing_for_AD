@@ -27,6 +27,8 @@ getenv         = True
 request_cpus   = 8
 request_memory = 24576
 
-environment = "OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+# DATASET set explicitly: getenv would otherwise pass through a DATASET left in the
+# submitting shell, and the wrapper would score that set instead.
+environment = "DATASET=case OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
 
 queue

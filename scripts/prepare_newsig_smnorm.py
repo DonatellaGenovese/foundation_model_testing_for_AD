@@ -34,14 +34,43 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 import hydra
 from omegaconf import OmegaConf
 
-from src.data.utils import get_all_cols, vectorize_to_local
+from src.data.utils import (
+    get_all_cols,
+    load_global_filelist,
+    make_split_manifest,
+    vectorize_to_local,
+)
 from src.preprocessing.preprocess import PreprocessingPipeline
 from src.train_full_anomaly_pipeline import _compose_cfg
 
 DATA        = Path("/eos/user/d/dgenoves/foundation_model_testing_data")
 STATS_LABEL = "v2_12class_nosparse_highlevel"          # SM-only statistics, no signal
-DST_LABEL   = "v2_nosparse_newsig_smnorm_highlevel"    # what we are building
+DST_LABEL   = "v3_nosparse_newsig_smnorm_highlevel"    # what we are building; v3, see config
 EXPERIMENT  = "new_exp/anomaly_newsig_smnorm"
+
+# Order in which the file manifest is DRAWN -- not the classes that are built.
+# make_split_manifest shuffles each folder's files from a single RNG, folder after
+# folder, so the files a folder receives depend on every folder drawn before it. The
+# published numbers (appendix Table 9) come from a tree whose manifest was drawn over
+# these six folders. Drawing over only the two built here hands HH_bbtautau different
+# test files -- RS22000103/129/173 instead of RS22000011/024/076 -- and so different
+# events and different numbers. Drawing in the original order and keeping two folders
+# reproduces the published selection file for file (checked against the stored v2
+# manifest). The four middle entries only advance the RNG; they are never vectorised.
+# A process added later must be APPENDED here: that leaves every earlier draw intact.
+MANIFEST_RNG_ORDER = ["QCD_HT50toInf", "VVV_incl", "VH_incl", "tttt_incl", "ttH_incl",
+                      "HH_bbtautau"]
+
+
+def build_manifest(folders: list, split_counts) -> dict:
+    """Train/val/test file lists for `folders`, drawn in MANIFEST_RNG_ORDER."""
+    missing = [f for f in folders if f not in MANIFEST_RNG_ORDER]
+    if missing:
+        raise SystemExit(f"{missing} not in MANIFEST_RNG_ORDER: append them there, or "
+                         f"which files they receive is undefined.")
+    full = make_split_manifest(load_global_filelist(), list(split_counts),
+                               MANIFEST_RNG_ORDER, seed=42)
+    return {f: full[f] for f in folders}
 
 
 def main() -> int:
@@ -90,6 +119,15 @@ def main() -> int:
     if not a.skip_vectorize:
         print("\n=== vectorising ===")
         dm = hydra.utils.instantiate(cfg.data)
+        manifest = build_manifest([dm.folder[c] for c in dm.classnames],
+                                  dm.train_val_test_split_per_class)
+        # Written to disk as well as passed in. vectorize_to_local does not save a
+        # manifest it is handed, and every later datamodule.prepare_data() -- which the
+        # inference jobs call -- reuses split_manifest.json when present and otherwise
+        # draws a fresh one in to_classify order, adding the wrong files to this tree.
+        manifest_path = Path(dm.paths["eos_vec_dir"]) / "split_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifest, indent=2))
         vectorize_to_local(
             base_dir=dm.paths["dataset_dir"],
             config=dm.datasets_config,
@@ -103,6 +141,7 @@ def main() -> int:
             split_counts=dm.train_val_test_split_per_class,
             read_batch_size=512,
             drop_empty_events=not a.keep_empty,
+            split_manifest=manifest,
         )
     else:
         print("\n=== vectorising skipped ===")

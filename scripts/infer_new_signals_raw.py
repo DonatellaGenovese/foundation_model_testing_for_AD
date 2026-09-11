@@ -47,21 +47,19 @@ SEEDS      = [7, 42, 137, 1337, 31337]
 
 # Same two held-out sets as infer_new_signals.py, so the raw baseline row is built on
 # exactly the events the learned-embedding rows are scored on. `classes` follows the
-# order of `to_classify` in the matching experiment config.
+# order of `to_classify` in the matching experiment config; see the note there on why
+# `newsig` writes to its own v3 root.
 DATASETS = {
     "newsig": {
         "experiment": "new_exp/anomaly_newsig_smnorm",
-        "out_root":   "ad_results_newsig",
-        "classes": {0: "QCD_inclusive", 1: "VVV", 2: "VH", 3: "tttt", 4: "ttH",
-                    5: "HH_bbtautau"},
+        "out_root":   "ad_results_newsig_v3",
+        "classes": {0: "QCD_inclusive", 1: "HH_bbtautau"},
     },
     "case": {
         "experiment": "new_exp/anomaly_case_smnorm",
         "out_root":   "ad_results_case",
         "classes": {0: "QCD_inclusive", 1: "hToAA_4b_ma60", 2: "hToAA_4tau_ma15",
-                    3: "HVdilep_Zp1000_piD2_mumu", 4: "RPV_squark300_UDD",
-                    5: "RPV_squark600_cascade_LSP550",
-                    6: "SUEPlike_HV_mPhi400_mX2_Lam4", 7: "Zprime_qq_m500"},
+                    3: "HVdilep_Zp1000_piD2_mumu"},
     },
 }
 NORMAL_LABEL = 0
@@ -142,8 +140,13 @@ def main() -> int:
 
     print(f"\n{'process':14s} {'n':>7s} {'AUROC':>7s} " +
           "  ".join(f"TPR@{int(f*100)}%" for f in sorted(thresholds)))
+    # Declared classes only, as in infer_new_signals.py. The datamodule already reads
+    # just the declared folders, so here this is a guard rather than a filter.
+    undeclared = sorted(set(y.tolist()) - set(CLASS_NAMES))
+    if undeclared:
+        print(f"Ignoring labels {undeclared}: not declared for '{a.dataset}'.")
     rows = []
-    for cls in sorted(set(y.tolist())):
+    for cls in sorted(CLASS_NAMES):
         if cls == NORMAL_LABEL:
             continue
         sig = mse[y == cls]

@@ -8,7 +8,8 @@
 # and from the threshold calibration.
 #
 # The dataset must already exist (scripts/prepare_case_smnorm.py); the wrapper fails
-# fast if fewer than 8 classes are present rather than producing partial results.
+# fast if fewer than 4 classes are present -- QCD plus the three CASE signals the
+# paper reports -- rather than producing partial results.
 # ================================
 
 executable = scripts/xai/submit/wrapper_case.sh

@@ -24,7 +24,14 @@
 #
 # Class indices (order of to_classify):
 #   normal   : [0]               — QCD_inclusive, the AE's trained normality
-#   anomaly  : [1..7]            — the seven CASE processes
+#   anomaly  : [1, 2, 3]         — the three CASE processes the paper reports
+#
+# Labels are positions in to_classify, written as integers into every `_y.npy`. The
+# study scored four more CASE processes that the paper does not report; they sat at
+# the END of this list, so removing them left the three kept here on labels 1-3 --
+# the labels a tree built before the selection already carries. Such a tree therefore
+# still reads correctly through this config. Remove or reorder entries anywhere else
+# and that stops being true: give the dataset a new `data.label` instead.
 
 defaults:
   - override /data: collide2v_basic
@@ -43,7 +50,7 @@ use_projections: false
 tags: ["anomaly_detection", "case_signals", "inference", "cern", "nosparse", "smnorm"]
 
 normal_classes: [0]
-anomaly_classes: [1, 2, 3, 4, 5, 6, 7]
+anomaly_classes: [1, 2, 3]
 
 paths:
   dataset_dir: /eos/user/d/dgenoves/foundation_model_testing_data/_case_src
@@ -63,10 +70,6 @@ data:
     - "hToAA_4b_ma60"                 # 1 — h->aa->4b, resolved b-jets
     - "hToAA_4tau_ma15"               # 2 — h->aa->4tau
     - "HVdilep_Zp1000_piD2_mumu"      # 3 — hidden valley, dimuon-rich
-    - "RPV_squark300_UDD"             # 4 — RPV squark, high multiplicity
-    - "RPV_squark600_cascade_LSP550"  # 5 — RPV cascade, hardest
-    - "SUEPlike_HV_mPhi400_mX2_Lam4"  # 6 — SUEP-like
-    - "Zprime_qq_m500"                # 7 — resonant dijet
 
   # Folder names equal process names for the CASE samples, so the mapping is the
   # identity there; QCD_inclusive keeps the mapping inherited from collide2v_basic.
@@ -74,10 +77,6 @@ data:
     "hToAA_4b_ma60": "hToAA_4b_ma60"
     "hToAA_4tau_ma15": "hToAA_4tau_ma15"
     "HVdilep_Zp1000_piD2_mumu": "HVdilep_Zp1000_piD2_mumu"
-    "RPV_squark300_UDD": "RPV_squark300_UDD"
-    "RPV_squark600_cascade_LSP550": "RPV_squark600_cascade_LSP550"
-    "SUEPlike_HV_mPhi400_mX2_Lam4": "SUEPlike_HV_mPhi400_mX2_Lam4"
-    "Zprime_qq_m500": "Zprime_qq_m500"
 
   datasets_config:
     jets:

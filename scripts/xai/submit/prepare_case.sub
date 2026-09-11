@@ -2,7 +2,7 @@
 # Condor: build the CASE held-out-signal dataset.
 #   condor_submit scripts/xai/submit/prepare_case.sub
 #
-# Vectorises the seven CASE processes plus QCD_inclusive and applies the SM-only
+# Vectorises the three CASE processes plus QCD_inclusive and applies the SM-only
 # normalisation in apply_only mode, so the signals land on the scale the encoder was
 # trained with without ever contributing to it. Resources stay well below the
 # bigmcore threshold (16 CPU / 64 GB), which routes to a 10-slot partition.

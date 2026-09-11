@@ -7,9 +7,9 @@
 # val-calibrated thresholds all already exist.
 #
 # The shared dataset must exist before submitting: it is built by the first job
-# to run, and concurrent jobs would race on the same tree. It was created by
-# cluster 9473324; the wrapper checks for 6/6 preprocessed classes and only
-# rebuilds if they are missing.
+# to run, and concurrent jobs would race on the same tree. The wrapper checks for
+# 2/2 preprocessed classes (QCD_inclusive, HH_bbtautau) under the v3 label and
+# builds the tree only if they are missing -- submit one job first and let it finish.
 # ================================
 
 executable = scripts/xai/submit/wrapper_newsig.sh

@@ -35,7 +35,7 @@ if [ -z "${SEEDS:-}" ]; then
   esac
 fi
 
-DATA=/eos/user/d/dgenoves/foundation_model_testing_data/v2_nosparse_newsig_smnorm_highlevel
+DATA=/eos/user/d/dgenoves/foundation_model_testing_data/v3_nosparse_newsig_smnorm_highlevel
 
 echo "[$(date)] additional signals — ${MODEL}, d=${DMODEL}, seeds: ${SEEDS}"
 echo "  host: $(hostname)"
@@ -46,10 +46,10 @@ apptainer exec --nv --bind /afs:/afs --bind /eos:/eos --writable-tmpfs "${IMAGE}
   export PROJECT_ROOT=${PROJECT_DIR}
 
   n_prep=\$(find ${DATA}/preprocessed/test -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
-  if [ \"\${n_prep}\" -eq 6 ]; then
-    echo '[stage 1] prepared dataset already present (6/6 classes) — skipping'
+  if [ \"\${n_prep}\" -eq 2 ]; then
+    echo '[stage 1] prepared dataset already present (2/2 classes) — skipping'
   else
-    echo \"[stage 1] preparing dataset (found \${n_prep}/6 classes)\"
+    echo \"[stage 1] preparing dataset (found \${n_prep}/2 classes)\"
     python3 scripts/prepare_newsig_smnorm.py
   fi
 

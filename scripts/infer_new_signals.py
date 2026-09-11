@@ -63,30 +63,32 @@ from src.train_full_anomaly_pipeline import extract_and_save_embeddings
 
 NEW_EXP    = Path("/eos/user/d/dgenoves/anomaly_pipeline/new_exp")
 
-# Held-out signal sets. Both are inference-only on processes normalised with the
-# SM-only statistics; they differ in provenance. `newsig` are proxies drawn from the
-# same COLLIDE-2V production as the training classes, `case` come from the separate
-# CASE production and cover topologies the proxies never reach — soft resolved b-jets,
-# a dimuon-rich hidden valley, high-multiplicity RPV cascades.
+# Held-out signal sets, restricted to the processes the paper reports. Both are
+# inference-only on processes normalised with the SM-only statistics; they differ in
+# provenance. `newsig` is a proxy drawn from the same COLLIDE-2V production as the
+# training classes, `case` come from the separate CASE production and cover
+# topologies the proxies never reach — soft resolved b-jets and taus from h->aa, and
+# a dimuon-rich hidden valley.
 #
 # `classes` must follow the order of `to_classify` in the matching experiment config:
-# the labels saved in the embeddings are positions in that list.
+# the labels saved in the embeddings are positions in that list, not names. That is
+# why `newsig` has its own v3 roots. The v2 tree it replaces held HH_bbtautau at
+# position 5 and VVV at 1, so its saved embeddings read through the map below would
+# report VVV as HH_bbtautau, silently. `case` keeps its roots: the three processes
+# kept are the first three, so their labels did not move.
 DATASETS = {
     "newsig": {
         "experiment": "new_exp/anomaly_newsig_smnorm",
-        "emb_root":   "newsig_embeddings",
-        "out_root":   "ad_results_newsig",
-        "classes": {0: "QCD_inclusive", 1: "VVV", 2: "VH", 3: "tttt", 4: "ttH",
-                    5: "HH_bbtautau"},
+        "emb_root":   "newsig_v3_embeddings",
+        "out_root":   "ad_results_newsig_v3",
+        "classes": {0: "QCD_inclusive", 1: "HH_bbtautau"},
     },
     "case": {
         "experiment": "new_exp/anomaly_case_smnorm",
         "emb_root":   "case_embeddings",
         "out_root":   "ad_results_case",
         "classes": {0: "QCD_inclusive", 1: "hToAA_4b_ma60", 2: "hToAA_4tau_ma15",
-                    3: "HVdilep_Zp1000_piD2_mumu", 4: "RPV_squark300_UDD",
-                    5: "RPV_squark600_cascade_LSP550",
-                    6: "SUEPlike_HV_mPhi400_mX2_Lam4", 7: "Zprime_qq_m500"},
+                    3: "HVdilep_Zp1000_piD2_mumu"},
     },
 }
 
@@ -214,8 +216,15 @@ def main() -> int:
 
     print(f"\n{'process':14s} {'n':>7s} {'AUROC':>7s} " +
           "  ".join(f"TPR@{int(f*100)}%" for f in sorted(thresholds)) + f" {'sep':>6s}")
+    # Score the declared classes only. CASE embeddings extracted before the paper's
+    # selection still carry the labels of four further processes, and iterating over
+    # whatever the file holds would report them again under their bare index.
+    undeclared = sorted(set(y.tolist()) - set(CLASS_NAMES))
+    if undeclared:
+        print(f"Ignoring labels {undeclared}: present in the embeddings but not declared "
+              f"for '{a.dataset}', so not processes the paper reports.")
     rows = []
-    for cls in sorted(set(y.tolist())):
+    for cls in sorted(CLASS_NAMES):
         if cls == NORMAL_LABEL:
             continue
         sig = mse[y == cls]

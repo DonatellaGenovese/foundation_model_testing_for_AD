@@ -9,8 +9,8 @@ to defining it. The script fails if the statistics change, which is the only way
 `apply_only` can go wrong silently.
 
 ONE THING IS DIFFERENT, AND IT MATTERS. Every CASE process has exactly one parquet
-file of 5,000 events, whereas the proxy signals have hundreds (VVV_incl 210,
-ttH_incl 1103). `make_split_manifest` assigns *whole files* greedily, filling train,
+file of 5,000 events, whereas the COLLIDE-2V proxies have hundreds (HH_bbtautau
+210). `make_split_manifest` assigns *whole files* greedily, filling train,
 then val, then test:
 
     for fname, n in items:
@@ -153,7 +153,10 @@ def main() -> int:
         print("\n=== vectorising ===")
         dm = hydra.utils.instantiate(cfg.data)
         vec_dir.mkdir(parents=True, exist_ok=True)
-        # Keep a copy on disk for provenance; vectorize_to_local uses the dict.
+        # On disk as well, and not for provenance only: vectorize_to_local does not save
+        # a manifest it is handed, and every later datamodule.prepare_data() -- the
+        # inference jobs call it -- reuses this file. Without it, prepare_data() would
+        # draw its own with make_split_manifest and add different QCD files to the tree.
         (vec_dir / "split_manifest.json").write_text(json.dumps(manifest, indent=2))
         vectorize_to_local(
             base_dir=str(base_dir),

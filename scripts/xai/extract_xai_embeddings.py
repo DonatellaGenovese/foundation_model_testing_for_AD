@@ -69,14 +69,20 @@ def main() -> int:
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--dmodel", type=int, default=256)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--new-exp", type=Path, default=NEW_EXP,
+                    help="Root holding the encoder runs, <new_exp>/<run>/seed_<seed>/")
+    ap.add_argument("--output-dir", type=Path, default=None,
+                    help="Default: the location the paper's runs read, "
+                         "<new_exp>/xai_embeddings_smnorm/<run>/encoder_seed_<seed>/embeddings")
     a = ap.parse_args()
 
     run        = f"vcreg_12class_nosparse_dmodel{a.dmodel}_cern"
     experiment = EXPERIMENT
-    seed_dir   = NEW_EXP / run / f"seed_{a.seed}"
+    seed_dir   = a.new_exp / run / f"seed_{a.seed}"
     # "smnorm" is in the path on purpose: the allsm embeddings that previously
     # lived under xai_embeddings/ are not interchangeable with these.
-    out_dir    = NEW_EXP / "xai_embeddings_smnorm" / run / f"encoder_seed_{a.seed}" / "embeddings"
+    out_dir    = a.output_dir or (a.new_exp / "xai_embeddings_smnorm" / run
+                                  / f"encoder_seed_{a.seed}" / "embeddings")
 
     ckpt = find_best_ckpt(seed_dir)
 

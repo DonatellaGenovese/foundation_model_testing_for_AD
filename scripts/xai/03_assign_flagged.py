@@ -41,7 +41,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from common.ae_score import compute_ae_mse, flag_anomalies, resolve_ae_threshold
-from common.constants import CLASS_NAMES, HH4B_LABEL, SIG_LABELS, SM_INDICES
+from common.constants import (
+    CLASS_NAMES,
+    HH4B_LABEL,
+    SIG_LABELS,
+    SIG_LABELS_TEX,
+    SM_INDICES,
+)
 from common.io_embeddings import filter_low_norm, load_train_val_test, sm_mask
 from common.projection import build_sm_pca, check_gmm_dims, project
 from common.style import OI
@@ -231,7 +237,7 @@ def main():
         "--matched-npz", type=Path, default=None,
         help="Read the test population from a matched array instead of a split tree. "
              "Needed for the CASE signals: their embedding tree holds QCD plus the "
-             "seven CASE processes and NO Standard-Model classes, so the SM fractions "
+             "CASE processes and NO Standard-Model classes, so the SM fractions "
              "this script reports would be empty. The matched array built by "
              "build_matched_case.py carries the 12 SM classes and the signal together, "
              "which is the population the flag rates are meant to describe.",
@@ -330,6 +336,8 @@ def main():
 
     sig = args.signal_label
     sig_name = SIG_LABELS.get(sig, CLASS_NAMES.get(sig, str(sig)))
+    # Figures get the typeset form; console output and JSON keep the plain one.
+    sig_name_tex = SIG_LABELS_TEX.get(sig, sig_name)
     mask_sig = y_te == sig
     mask_flag = mask_sig & anomalous
     mask_missed = mask_sig & ~anomalous
@@ -356,7 +364,7 @@ def main():
         frac_all,
         frac_sm,
         k,
-        sig_name,
+        sig_name_tex,
         plots / "flagged_assignment.pdf",
         dominant=plot_dominant,
         ylim=args.ylim,
@@ -365,7 +373,7 @@ def main():
         frac_flag,
         frac_all,
         k,
-        sig_name,
+        sig_name_tex,
         plots / "flagged_only.pdf",
         dominant=plot_dominant,
     )
@@ -373,7 +381,7 @@ def main():
         frac_flag,
         frac_missed,
         k,
-        sig_name,
+        sig_name_tex,
         plots / "flagged_vs_missed.pdf",
         dominant=plot_dominant,
     )

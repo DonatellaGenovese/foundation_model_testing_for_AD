@@ -10,7 +10,7 @@ vectorized_dir: /eos/user/d/dgenoves/foundation_model_testing_data/v2_nosparse_h
 output_root: /eos/user/d/dgenoves/anomaly_pipeline/xai_paper/vcreg_d128_seed0
 
 signal_label: 13  # HH→4b
-k: 12            # override after 01_select_k
+k: 12            # override per run; the paper's mixture is K = 7 (README stage 4)
 fpr: 0.10
 min_frac_populated: 0.05
 ari_threshold: 0.8

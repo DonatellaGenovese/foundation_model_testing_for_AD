@@ -31,23 +31,26 @@ import matplotlib.pyplot as plt
 
 from common.style import OI
 
-XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper/k_profiles")
+DEFAULT_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper/k_profiles")
 FLOOR = 0.2          # must match `min_share` in select_k_profiles.py
 K_SELECTED = 7
 
 
-def load(tag: str):
-    rows = list(csv.DictReader(open(XP / f"vcreg_d256_seed3_{tag}" / "k_profiles.csv")))
+def load(xp: Path, tag: str):
+    rows = list(csv.DictReader(open(xp / f"vcreg_d256_seed3_{tag}" / "k_profiles.csv")))
     return [int(r["k"]) for r in rows], [float(r["min_rel_share"]) for r in rows]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--xp", type=Path, default=DEFAULT_XP,
+                    help="Directory holding vcreg_d256_seed3_{raw,pca64}/k_profiles.csv "
+                         "(default: the paper's runs)")
     ap.add_argument("--outdir", type=Path, default=Path(__file__).resolve().parent)
     a = ap.parse_args()
 
-    kr, mr = load("raw")
-    kp, mp = load("pca64")
+    kr, mr = load(a.xp, "raw")
+    kp, mp = load(a.xp, "pca64")
     i7 = kp.index(K_SELECTED)
 
     fig, ax = plt.subplots(figsize=(5.4, 3.4))

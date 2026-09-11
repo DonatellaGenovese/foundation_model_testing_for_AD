@@ -49,6 +49,10 @@ from common.physics import compute_physics, load_matched_npz, save_matched_npz
 
 CASE_DATA = Path("/eos/user/d/dgenoves/foundation_model_testing_data/"
                  "v2_nosparse_case_smnorm_highlevel")
+# Symlink tree the CASE config reads from, one entry per process pointing into the b2g
+# production. Used here to reach the reconstructed object lists, which the vectorised
+# arrays no longer carry once they have been truncated to the per-group top-k.
+CASE_SRC = Path("/eos/user/d/dgenoves/foundation_model_testing_data/_case_src")
 
 
 def load_shards(d: Path, max_events: int = 0) -> np.ndarray:
@@ -57,6 +61,51 @@ def load_shards(d: Path, max_events: int = 0) -> np.ndarray:
         raise FileNotFoundError(f"no *_x.npy under {d}")
     X = np.concatenate([np.load(f) for f in files], axis=0)
     return X[:max_events] if max_events else X
+
+
+def true_lepton_count(case_label: str, n_expect: int,
+                      case_src: Path = CASE_SRC) -> np.ndarray | None:
+    """Lepton multiplicity read from the CASE parquet, before the top-k truncation.
+
+    compute_physics() counts leptons off the padded arrays, which keep at most eight
+    muons and eight electrons. For every Standard Model process and for the proxy
+    signals that cap is never reached --- their maxima are six and seven --- so the two
+    counts agree. The dimuon signal is the exception: 38% of its events have more than
+    eight muons, the true multiplicity runs to 23, and counting off the padded array
+    turns a smooth distribution into a 43% spike sitting exactly on the cap. That spike
+    is a property of the input pipeline, not of the events, so the observable is read
+    from the reconstructed lists instead and the truncation is stated in the text as a
+    limit of what the encoder sees.
+
+    Events with no reconstructed objects at all are dropped upstream, so they are
+    removed here too; the caller checks the resulting length against the embeddings.
+    Returns None when the parquet cannot be located, leaving the padded count in place.
+    """
+    folder = case_src / case_label
+    files = sorted(folder.glob("*.parquet"))
+    if not files:
+        print(f"  no parquet under {folder}; keeping the truncated lepton count")
+        return None
+
+    import pyarrow.parquet as pq
+
+    cols = ["FullReco_MuonTight_PT", "FullReco_Electron_PT",
+            "FullReco_JetPuppiAK4_PT", "FullReco_PhotonTight_PT"]
+    counts = []
+    for f in files:
+        tab = pq.read_table(f, columns=cols)
+        per_col = [np.array([len(x) if x is not None else 0 for x in tab.column(c).to_pylist()])
+                   for c in cols]
+        counts.append(np.stack(per_col, axis=1))
+    n = np.concatenate(counts, axis=0)          # columns: mu, e, jet, gamma
+    keep = n.sum(axis=1) > 0
+    true_n = (n[:, 0] + n[:, 1])[keep]
+
+    if len(true_n) != n_expect:
+        print(f"  parquet gives {len(true_n):,} non-empty events against {n_expect:,} "
+              f"embeddings; keeping the truncated lepton count")
+        return None
+    return true_n.astype(float)
 
 
 def main() -> int:
@@ -70,6 +119,11 @@ def main() -> int:
     p.add_argument("--ckpt", type=Path, required=True, help="Encoder checkpoint")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--max-signal", type=int, default=0, help="0 = all available")
+    p.add_argument("--case-data", type=Path, default=CASE_DATA,
+                   help="CASE dataset tree with vectorized/ and preprocessed/ (stage 1)")
+    p.add_argument("--case-src", type=Path, default=CASE_SRC,
+                   help="Per-process folders of CASE parquet, for the untruncated "
+                        "lepton count")
     args = p.parse_args()
 
     if args.signal_label <= 14:
@@ -85,9 +139,29 @@ def main() -> int:
     print(f"SM background reused from {args.sm_matched.name}: {len(y_sm):,} events, "
           f"{len(set(y_sm.tolist()))} classes")
 
+    # The Standard Model block is copied verbatim from another matched file rather than
+    # recomputed, so a change to compute_physics does not reach it: the file has to be
+    # rebuilt too. That is not hypothetical --- the b-tag definition was corrected in
+    # August and the fix took a month to arrive here, during which the signal block was
+    # counted at the medium working point while the Standard Model it is compared against
+    # was still counted as an OR over all six, at a 24% light-jet mistag. Nothing failed;
+    # the two halves of every comparison simply meant different things. So: recompute one
+    # observable on a sample of the inherited block and check it against what is stored.
+    # Measured on this twelve-class, class-balanced Standard Model sample: the medium
+    # working point gives a mean of 0.52 b-tags per event, the OR over all six bits 1.46.
+    # 1.0 sits between them with room on either side.
+    sm_nb = float(np.nanmean(phys_sm["n_bjets"]))
+    print(f"  SM block b-tag check: mean n_bjets {sm_nb:.3f} (medium WP gives ~0.52)")
+    if sm_nb > 1.0:
+        print("  WARNING: the inherited Standard Model block has n_bjets around the value "
+              "the OR over all six b-tag bits produces (~1.46), not the medium working "
+              "point (~0.52). It was probably built before the b-tag fix. Rebuild "
+              "--sm-matched first, or the signal and the background it is compared "
+              "against will be counted differently.")
+
     # ── Signal block, built from the CASE trees ──────────────────────────────
-    vec_dir = CASE_DATA / "vectorized" / "test" / args.case_label
-    pre_dir = CASE_DATA / "preprocessed" / "test" / args.case_label
+    vec_dir = args.case_data / "vectorized" / "test" / args.case_label
+    pre_dir = args.case_data / "preprocessed" / "test" / args.case_label
     X_raw = load_shards(vec_dir, args.max_signal)
     X_pp = load_shards(pre_dir, args.max_signal)
     if len(X_raw) != len(X_pp):
@@ -98,6 +172,15 @@ def main() -> int:
           f"(raw dim {X_raw.shape[1]}, preprocessed dim {X_pp.shape[1]})")
 
     phys_sig = compute_physics(X_raw)
+
+    true_nlep = true_lepton_count(args.case_label, len(X_raw), args.case_src)
+    if true_nlep is not None:
+        trunc = phys_sig["n_leptons"]
+        n_capped = int((trunc >= 8).sum())
+        phys_sig["n_leptons"] = true_nlep
+        print(f"n_leptons read from the parquet: median {np.median(true_nlep):.0f}, "
+              f"max {true_nlep.max():.0f}; {n_capped:,} events ({n_capped/len(trunc)*100:.1f}%) "
+              f"were sitting on the eight-muon cap")
 
     import torch
     sys.path.insert(0, str(_XAI))

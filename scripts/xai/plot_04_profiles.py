@@ -10,11 +10,11 @@ each observable relative to the SM population as a whole, which is exactly the
 "interpretable, data-driven profile for each region" the method promises.
 
 What a cell shows: the median of that observable among the SM events assigned to
-that component, minus the global SM median, in units of the observable's global
-standard deviation (`phys_scale` from step 04, so the scaling matches the
-Wasserstein ranking). Positive means the region sits high in that observable.
-A diverging scale is used because the quantity has a natural neutral point at
-zero; the midpoint is grey, never a hue.
+that component, minus the global SM median, in units of the SM's own standard
+deviation. Positive means the region sits high in that observable. A diverging
+scale is used because the quantity has a natural neutral point at zero, and the
+colormap puts white exactly there — so a cell with no deviation and a cell that
+could not be computed would look alike, and the latter is hatched instead.
 
 The full distributions remain available as the step 04 overlay, which belongs in
 an appendix where a reader can inspect shape rather than location.
@@ -83,30 +83,85 @@ def main() -> int:
     )
     p.add_argument("--min-events", type=int, default=200,
                    help="Components with fewer local SM events are left blank")
+    p.add_argument(
+        "--min-cell-frac", type=float, default=0.15,
+        help="Blank a single cell when fewer than this share of the component's SM "
+             "events yield a finite value. Mjj and |deta_jj| need two jets and MT needs "
+             "a lepton, and the share that qualifies swings by component: Mjj is filled "
+             "by 33 of C1's 18,186 events (0.2%%) against all 29,106 of C2's, and MT by "
+             "4.0%% of C3 against 92%% of C2. Those cells are precise --- C1's Mjj "
+             "bootstraps to +-0.01 --- but they describe a fraction of a per cent of the "
+             "region while sitting in a grid whose other cells describe all of it. "
+             "Default 0.15 sits inside the natural gap in the coverage (10.5%% to 21.5%% "
+             "for MT, 0.2%% to 55.8%% for Mjj), so the cut is insensitive to its own "
+             "value.",
+    )
+    p.add_argument(
+        "--assignments", type=Path, default=None,
+        help="Read component assignments from this assignments.npz (step 03) instead of "
+             "refitting the PCA and re-running gmm.predict. The projection is refitted "
+             "from the SM train embeddings, and passing a --pca-dim or --pca-seed other "
+             "than the one the mixture was fitted with applies it in a basis it never "
+             "saw, silently. Reusing the stored assignment removes that failure mode and "
+             "guarantees the figure partitions the events exactly as the tables do.",
+    )
     args = p.parse_args()
 
     run = args.run_dir
     meta = json.loads((run / "04_profile" / "profile_meta.json").read_text())
     k = int(meta["k"])
-    phys_scale = meta["phys_scale"]
     populated = {int(c) for c in meta["populated_components"]}
 
     Z, y, phys = load_matched_npz(run / "04_profile" / "matched_sm_hh4b.npz")
-    gmm = joblib.load(meta["gmm_path"])
-    # Only the assignment is projected; the physics profile below is computed on the
-    # events themselves, so nothing else depends on --pca-dim.
-    pca = None
-    if args.pca_dim and args.pca_dim > 0:
-        if args.pca_embeddings_dir is None:
-            raise SystemExit("--pca-dim requires --pca-embeddings-dir")
-        pca = build_sm_pca(args.pca_embeddings_dir, args.pca_dim, seed=args.pca_seed)
-    Z_gmm = project(pca, Z)
-    check_gmm_dims(gmm, Z_gmm)
-    assign = gmm.predict(Z_gmm)
+    if args.assignments:
+        stored = np.load(args.assignments)
+        # Paired by position, so a different row order would misattribute every event
+        # without changing a single count. The labels ride along in both files for
+        # exactly this check.
+        if not np.array_equal(stored["labels"], y):
+            raise SystemExit(
+                f"{args.assignments} holds {len(stored['labels']):,} labels that do not "
+                f"match the {len(y):,} of the matched array; the two were built from "
+                f"different event sets and cannot be paired by position.")
+        assign = stored["assignments"]
+        print(f"Assignments read from {args.assignments}")
+    else:
+        gmm = joblib.load(meta["gmm_path"])
+        # Only the assignment is projected; the physics profile below is computed on the
+        # events themselves, so nothing else depends on --pca-dim.
+        pca = None
+        if args.pca_dim and args.pca_dim > 0:
+            if args.pca_embeddings_dir is None:
+                raise SystemExit("--pca-dim requires --pca-embeddings-dir")
+            pca = build_sm_pca(args.pca_embeddings_dir, args.pca_dim, seed=args.pca_seed)
+        Z_gmm = project(pca, Z)
+        check_gmm_dims(gmm, Z_gmm)
+        assign = gmm.predict(Z_gmm)
     mask_sm = np.isin(y, SM_INDICES)
 
     out = args.output or (run / "04_profile" / "plots" / "component_profiles.pdf")
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    # Reference median and scale, both from the Standard Model alone, and both over the
+    # events where the observable is defined so the two describe the same population.
+    #
+    # Step 04's `phys_scale` is deliberately NOT used here. It is a standard deviation
+    # over the whole matched array, signal included, because it exists to make the
+    # Wasserstein ranking comparable across observables and there the signal is half of
+    # every comparison. This figure contains no signal at all, so borrowing that scale
+    # divides an SM-only numerator by a spread the signal helped set. On n_b-tag that is
+    # not a rounding matter: the HH->4b block carries 2.37 tags per event against the
+    # SM's 0.52 and inflates the scale by 19%, compressing the whole row. It would also
+    # leave the figure dependent on which signal the run happened to carry — the dimuon
+    # run gives 0.806 where this one gives 0.968, a 20% swing — although the partition
+    # the figure describes is a property of the Standard Model alone, which is what lets
+    # one figure serve several signals (see --mark).
+    sm_ref, sm_scale = {}, {}
+    for var in PHYSICS_VARS:
+        allv = phys[var][mask_sm]
+        allv = allv[np.isfinite(allv)]
+        sm_ref[var] = float(np.median(allv)) if len(allv) else float("nan")
+        sm_scale[var] = float(np.std(allv)) if len(allv) else float("nan")
 
     mat = np.full((len(PHYSICS_VARS), k), np.nan)
     counts = np.zeros(k, dtype=int)
@@ -118,18 +173,30 @@ def main() -> int:
         for vi, var in enumerate(PHYSICS_VARS):
             vals = phys[var][m]
             vals = vals[np.isfinite(vals)]
-            allv = phys[var][mask_sm]
-            allv = allv[np.isfinite(allv)]
-            sc = phys_scale.get(var, np.nan)
-            if len(vals) and len(allv) and np.isfinite(sc) and sc > 0:
-                mat[vi, ki] = (np.median(vals) - np.median(allv)) / sc
+            # Coverage, not precision, is what disqualifies a cell here: C1's Mjj median
+            # is stable to +-0.01 under the bootstrap and still describes 33 of its
+            # 18,186 events. See --min-cell-frac.
+            if len(vals) < args.min_cell_frac * counts[ki]:
+                continue
+            ref, sc = sm_ref[var], sm_scale[var]
+            if len(vals) and np.isfinite(ref) and np.isfinite(sc) and sc > 0:
+                mat[vi, ki] = (np.median(vals) - ref) / sc
 
     lim = float(np.nanmax(np.abs(mat))) if np.isfinite(mat).any() else 1.0
     norm = diverging_norm(lim)
     lim = float(norm.vmax)
 
     fig, ax = plt.subplots(figsize=(max(7.5, k * 0.72), 4.4))
-    im = ax.imshow(mat, cmap=DIVERGING, norm=norm, aspect="auto")
+    # The colormap puts white on zero by construction, so a blanked cell must not also be
+    # white: it would read as "no deviation from the SM" rather than "not computed", and
+    # the two say opposite things. Grey plus a hatch separates them and survives a
+    # greyscale print.
+    cmap = DIVERGING.copy()
+    cmap.set_bad("#d8d8d8")
+    im = ax.imshow(mat, cmap=cmap, norm=norm, aspect="auto")
+    for vi, ki in zip(*np.where(~np.isfinite(mat))):
+        ax.add_patch(plt.Rectangle((ki - 0.5, vi - 0.5), 1, 1, fill=False,
+                                   hatch="////", edgecolor="#9e9e9e", linewidth=0))
 
     ax.set_xticks(np.arange(k))
     ax.set_xticklabels([f"C{i}" for i in range(k)])

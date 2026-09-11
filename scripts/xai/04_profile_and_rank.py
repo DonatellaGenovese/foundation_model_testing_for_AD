@@ -65,6 +65,7 @@ from common.constants import (
     PHYSICS_LABELS,
     PHYSICS_VARS,
     SIG_LABELS,
+    SIG_LABELS_TEX,
     SM_INDICES,
 )
 from common.style import OI
@@ -471,7 +472,12 @@ def write_tex(rows: list[dict], path: Path, caption: str):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--gmm-path", type=Path, required=True)
+    p.add_argument(
+        "--gmm-path", type=Path, default=None,
+        help="Required, except when the run only builds the matched array "
+             "(--save-matched without --matched-npz). The array does not depend on "
+             "the mixture, and the K scan that fits the mixture needs the array.",
+    )
     p.add_argument("--output-dir", type=Path, required=True)
     p.add_argument(
         "--pca-dim", type=float, default=0.0,
@@ -534,8 +540,9 @@ def main():
     plots = out / "plots"
     plots.mkdir(exist_ok=True)
 
-    gmm = joblib.load(args.gmm_path)
-    k = int(gmm.n_components)
+    if args.gmm_path is None and (args.matched_npz is not None or args.save_matched is None):
+        p.error("--gmm-path is required unless the run only builds the matched array "
+                "(--save-matched without --matched-npz)")
 
     # ── Load or build matched (z, y, phys) ───────────────────────────────────
     if args.matched_npz is not None:
@@ -562,6 +569,13 @@ def main():
         )
         if args.save_matched:
             save_matched_npz(args.save_matched, Z, y, phys)
+
+    if args.gmm_path is None:
+        print(f"Matched array saved to {args.save_matched}; no --gmm-path, stopping here.")
+        return
+
+    gmm = joblib.load(args.gmm_path)
+    k = int(gmm.n_components)
 
     # ── AE flags + GMM assignment ────────────────────────────────────────────
     # ae-checkpoint is always required: per-event MSE is always scored fresh on
@@ -598,6 +612,9 @@ def main():
 
     sig = args.signal_label
     sig_name = SIG_LABELS.get(sig, CLASS_NAMES.get(sig, str(sig)))
+    # Figures get the typeset form. sig_name stays plain: it seeds the output filenames
+    # below and the LaTeX caption, neither of which wants maths markup twice over.
+    sig_name_tex = SIG_LABELS_TEX.get(sig, sig_name)
     mask_sig_all = y == sig
     mask_flag = mask_sig_all & anomalous
     mask_missed = mask_sig_all & ~anomalous
@@ -658,7 +675,7 @@ def main():
             m_sig,
             m_loc,
             ki,
-            sig_name,
+            sig_name_tex,
             plot_dominant[ki],
             plots / f"{sig_slug}_vs_sm_k{ki}.pdf",
         )
@@ -667,7 +684,7 @@ def main():
             m_sig,
             m_loc,
             ki,
-            sig_name,
+            sig_name_tex,
             plot_dominant[ki],
             ae_thr,
             plots / f"ae_mse_{sig_slug}_k{ki}.pdf",
@@ -678,7 +695,7 @@ def main():
             m_miss,
             m_loc,
             ki,
-            sig_name,
+            sig_name_tex,
             plot_dominant[ki],
             plots / f"{sig_slug}_vs_sm_missed_k{ki}.pdf",
         )
@@ -689,7 +706,7 @@ def main():
         all_rows,
         out / "wasserstein_rank.tex",
         caption=(
-            f"Wasserstein-1 distances between AE-flagged {sig_name} and the local "
+            f"Wasserstein-1 distances between AE-flagged {sig_name_tex} and the local "
             f"Standard Model background within populated GMM components, standardised "
             f"by each observable's global standard deviation and ranked by that "
             f"distance. The local QCD column, the autoencoder's "

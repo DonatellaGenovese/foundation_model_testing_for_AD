@@ -9,15 +9,19 @@ against the local Standard Model, the same two populations the Wasserstein dista
 the table is computed between. The full grids stay in the appendix.
 
 Both panels are drawn as densities so that populations of very different size can be
-compared, and each is annotated with its standardised W1 so the figure and the table
-carry the same number.
+compared. The Wasserstein distance is deliberately NOT annotated on the panels: it is
+printed in the table this figure sits beside, and an earlier version that repeated it
+here kept the value hardcoded, so when the lepton count was recomputed the figure went
+on claiming 4.51 against the table's 4.76. One number, one place.
 
 Usage:
     python paper/figures/make_top_observable.py
+    python paper/figures/make_top_observable.py --xp <xai output root> --output <pdf>
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -34,25 +38,35 @@ import numpy as np
 from common.constants import PHYSICS_BINS, PHYSICS_LABELS, SM_INDICES
 from common.style import OI
 
-XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper")
-OUT = Path(__file__).resolve().parent / "xai" / "top_observable_K7.pdf"
+DEFAULT_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper")
+DEFAULT_OUT = Path(__file__).resolve().parent / "xai" / "top_observable_K7.pdf"
 
-PANELS = [
-    dict(tag="hh4b", label=13, comp=5, var="n_bjets", w1=1.28,
-         name=r"$HH \to 4b$",
-         npz=XP / "vcreg_d256_seed3_smnorm" / "04_profile" / "matched_sm_hh4b.npz"),
-    dict(tag="hvdilep", label=20, comp=2, var="n_leptons", w1=4.51,
-         name=r"HV $Z' \to \mu\mu$",
-         npz=XP / "case_HVdilep_Zp1000_piD2_mumu_d256_seed3"
-                / "matched_sm_HVdilep_Zp1000_piD2_mumu.npz"),
-]
+
+def panels(xp: Path) -> list[dict]:
+    return [
+        dict(tag="hh4b", label=13, comp=5, var="n_bjets",
+             name=r"$HH \to 4b$",
+             npz=xp / "vcreg_d256_seed3_smnorm" / "04_profile" / "matched_sm_hh4b.npz"),
+        dict(tag="hvdilep", label=20, comp=2, var="n_leptons",
+             name=r"$Z^{\prime} \to n(\mu\mu)$",
+             npz=xp / "case_HVdilep_Zp1000_piD2_mumu_d256_seed3"
+                    / "matched_sm_HVdilep_Zp1000_piD2_mumu.npz"),
+    ]
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--xp", type=Path, default=DEFAULT_XP,
+                    help="Root of the XAI outputs (default: the paper's runs)")
+    ap.add_argument("--output", type=Path, default=DEFAULT_OUT)
+    args = ap.parse_args()
+    OUT = args.output
+
     fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.5))
 
-    for ax, cfg in zip(axes, PANELS):
-        run = XP / f"k7_{cfg['tag']}_pca64_d256_seed3" / "03_assign_matched" / "assignments.npz"
+    for ax, cfg in zip(axes, panels(args.xp)):
+        run = args.xp / f"k7_{cfg['tag']}_pca64_d256_seed3" / "03_assign_matched" / "assignments.npz"
         d = np.load(run)
         y, a, flagged = d["labels"], d["assignments"], d["ae_flagged"].astype(bool)
         vals = np.load(cfg["npz"])[f"phys_{cfg['var']}"]
@@ -71,8 +85,7 @@ def main() -> int:
 
         ax.set_xlabel(PHYSICS_LABELS[cfg["var"]], fontsize=11)
         ax.set_ylabel("Density", fontsize=10)
-        ax.set_title(rf"C{cfg['comp']}  ---  $W_1^{{\mathrm{{SM}}}} = {cfg['w1']:.2f}$",
-                     fontsize=11)
+        ax.set_title(f"component C{cfg['comp']}", fontsize=11)
         ax.legend(fontsize=8.5, frameon=False)
         ax.tick_params(labelsize=9)
 

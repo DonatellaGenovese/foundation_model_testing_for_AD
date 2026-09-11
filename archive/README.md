@@ -41,6 +41,45 @@ selected these files checked every `.py`, `.sh`, `.sub` and `.yaml` in the repos
   of which exist on EOS. The published VCReg is submitted by
   `scripts/new_exp/submit_training_new_exp.py --models vcreg` with seeds 0–4.
 
+  Also `raw_ae_qcd_new_exp.sub` and `raw_ae_allsm_new_exp.sub`, the two raw-feature AE
+  submitters from which no published row came. The first runs the tree without the
+  SM-only normalisation (`anomaly_qcd_vs_higgs_raw_nosparse_cern`) and writes into
+  `ad_results/raw`, the directory of the published baseline. Its wrapper skips a seed
+  whose summary already exists, so running both kept whichever ran first, with nothing
+  in the output to say which. The published row comes from `raw_ae_qcd_smnorm_new_exp.sub`,
+  as the `raw_experiment` field of all five `strategies_summary.json` confirms. The
+  second trains the AE on all twelve SM classes instead of QCD alone. Both still carry
+  the `stream_output` lines the CERN schedd rejects.
+
+- `superseded_submitters/xai/` — interpretability submitters from which no published
+  figure or table came. The paper's chain is written out step by step in stage 4 of the
+  top-level README.
+  - `xai_full.sub` + `wrapper_xai_full.sh` run steps 01–06 end to end with the
+    mixture chosen by `01_select_k.py` (unprojected, K from ARI). That is a different
+    mixture from the paper's K = 7 on PCA 64. The only paper output that ever came
+    through it is `matched_sm_hh4b.npz`, which has since been rebuilt by
+    `04_profile_and_rank.py --save-matched`.
+  - `xai_k7.sub` + `wrapper_xai_k7.sh` run steps 03, 05 and 06 at K = 7, but step 03
+    for HH→4b scores the whole test set rather than the matched array, writes to
+    `03_assign` instead of `03_assign_matched`, and step 06 reads its `profile_meta`
+    from `rank_k7/`, which predates the b-tag fix.
+  - `rank_k7.sub` + `wrapper_rank_k7.sh` write `rank_k7/`, the pre-fix ranking; the
+    paper's is `rank_k7_sm/`.
+  - `select_k_v3_pca.sub` scans a PCA at 99% variance (209 dimensions). The paper's
+    mixtures come from `select_k_v4_pca_aggressive.sub` at 64 dimensions.
+
+  They still point at `scripts/xai/submit/wrapper_*.sh`, so they cannot run from here.
+
+  Archived with them, the earlier K-selection machinery, which no published figure or
+  table came from either. `01_select_k.py` (BIC/ARI scan) and `02_fit_gmm.py` fit the
+  mixture the way the first drafts did; the paper's mixture is fitted by
+  `select_k_interpretable.py` and the value of K comes from `select_k_profiles.py`, both
+  of which stay in `scripts/xai/`. With them go the three workflows that were their only
+  callers: `submit_select_k.py` + `wrapper_select_k.sh` (step 01 on a d128 seed-0 run),
+  `submit_xai_pipeline.py` + `wrapper_xai_pipeline.sh` (step 02), and the ARI-scaling
+  diagnostic `diagnose_ari_scaling.py` with `k_diagnostic.sub`, `ari_scaling.sub` and
+  their two wrappers, which measured how ARI moves with sample size.
+
 - `configs/experiment_ablation_arch/` — the 44-config `*_arch_*` architecture sweep
   (dff, dropout, heads, layers, per model), plus its launcher in
   `superseded_submitters/submit_training_ablation_backbone.py` and its two `paths`

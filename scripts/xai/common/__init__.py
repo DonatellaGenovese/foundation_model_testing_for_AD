@@ -9,6 +9,7 @@ from .constants import (
     PHYSICS_LABELS,
     PHYSICS_VARS,
     SIG_LABELS,
+    SIG_LABELS_TEX,
     SM_COLORS,
     SM_INDICES,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "BSM_INDICES",
     "HH4B_LABEL",
     "SIG_LABELS",
+    "SIG_LABELS_TEX",
     "CLASS_NAMES",
     "CLASS_FOLDERS",
     "SM_COLORS",

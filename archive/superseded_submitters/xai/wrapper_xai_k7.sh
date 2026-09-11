@@ -62,7 +62,7 @@ GMM_DIR=$(dirname "${GMM}")
 # guarantee it paired the same events.
 #
 # THE TWO SIGNALS DO NOT SHARE AN EMBEDDING TREE, and only one of them can be read
-# from a split tree at all. The CASE tree holds QCD plus the seven CASE processes and
+# from a split tree at all. The CASE tree holds QCD plus the CASE processes and
 # no Standard-Model classes, so step 03 reads the matched array there instead — that
 # array carries the 12 SM classes and the signal together, which is the population the
 # flag rates describe. Step 05 still points at the SM tree, because all it takes from

@@ -74,10 +74,23 @@ def main() -> int:
                    help="Default: <run-dir>/06_ae_mechanism/plots/ae_convergence.pdf")
     p.add_argument("--group", default="flagged", choices=["flagged", "local_qcd"],
                    help="Population the correlation is computed over")
+    p.add_argument(
+        "--components", default=None, metavar="C1,C2",
+        help="Show only these components, comma-separated. Without it every populated "
+             "component is drawn. Useful where one region holds nearly all of the "
+             "flagged signal and the others would give a sparsely populated panel equal "
+             "visual weight.",
+    )
     args = p.parse_args()
 
     mech, winners = load(args.run_dir)
     results = mech["results"]
+    if args.components:
+        want = {int(c) for c in args.components.split(",") if c.strip()}
+        results = [r for r in results if int(r["component"]) in want]
+        missing = want - {int(r["component"]) for r in results}
+        if missing:
+            print(f"Components {sorted(missing)} are not populated in this run; skipped.")
     if not results:
         print("No populated components in ae_mechanism.json — nothing to plot.")
         return 1
@@ -145,11 +158,9 @@ def main() -> int:
         loc="lower center", ncol=2, frameon=False, fontsize=9,
         bbox_to_anchor=(0.5, -0.02),
     )
-    fig.suptitle(
-        "AE reconstruction error vs high-level observables, flagged signal",
-        fontsize=11,
-    )
-    fig.tight_layout(rect=(0, 0.06, 1, 0.97))
+    # No suptitle: the figure is a subfigure inside a float whose caption already says
+    # what is plotted, and repeating it above the panels only steals vertical space.
+    fig.tight_layout(rect=(0, 0.06, 1, 1.0))
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved {out}")

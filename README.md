@@ -96,6 +96,33 @@ If the source production changes, rescan the event map first:
 python src/utils/nEvents_scan/scan_parquet_nevent.py
 ```
 
+### Or download the data instead
+
+Stage 1 takes hours on the batch system, and its output is published: the vectorised and
+preprocessed 12-class trees, which are what training and the probes read.
+
+```bash
+bash scripts/download_dataset.sh                 # both trees, about 44 GB
+bash scripts/download_dataset.sh preprocessed    # only the preprocessed tree, 18 GB
+bash scripts/download_dataset.sh vectorized      # only the vectorised tree, 26 GB
+```
+
+They unpack into `data/v2_12class_nosparse_highlevel/`, and a run reads them by
+overriding one path:
+
+```bash
+python src/train.py experiment=fm_testing_12class_nosparse_dmodel256_cern seed=7 \
+    paths.eos_data_dir=$PWD/data
+```
+
+Both trees are published because the data loader walks the vectorised tree before every
+run — it skips the shards that already exist — so with the preprocessed tree alone it
+would try to read the source production, which lives in a CERN project space
+(`paths.dataset_dir`).
+
+The held-out signal trees above are not published in full. The test splits the
+interpretability stage needs come with its own package; see stage 4.
+
 ---
 
 ## 2. Training
@@ -140,6 +167,36 @@ per-class AUROC comes from its own test predictions, which training writes to
 python scripts/aggregate_ce_auroc.py    # CE rows of Tables 4 and 8
 ```
 
+**Probing a published encoder.** The encoders the paper reports are published, so a
+probe can be run without training anything:
+
+```bash
+bash scripts/download_weights.sh encoders     # 2.24 GB into data/weights/encoders/
+```
+
+The file name carries the run — `<model>_d<dim>_seed<seed>.ckpt` — and the epoch the run
+stopped at is inside the checkpoint, together with the architecture. One probe is then
+one command:
+
+```bash
+python src/eval_probes.py experiment=vcreg_12class_nosparse_dmodel256_cern \
+    ckpt_path=data/weights/encoders/vcreg_d256_seed3.ckpt seed=3 \
+    eval.linear_probe.max_epochs=50 \
+    paths.eos_data_dir=$PWD/data paths.output_dir=$PWD/outputs/probe_vcreg_d256_seed3
+```
+
+`experiment=` selects the probe protocol — split, labels, dataset — not the architecture,
+which comes from the checkpoint. It is `new_exp/supcon_dmodel{dim}`,
+`new_exp/simclr_dmodel{dim}`, `new_exp/vicreg_dmodel{dim}` for the other three, and the
+one above for VCReg. Averaging the five seeds of a model is what
+`scripts/aggregate_probe_results.py` does, and its output is the
+`aggregated_summary.json` the tables read.
+
+The seed sets differ per model: VCReg 0–4, SupCon and SimCLR 7/42/137/1337/31337, VICReg
+7/42/12345/1337/31337. Note also that the runs recorded in `probe_results/` and
+`ad_results/` name two directories that were later renamed: `selfsupcon` is SimCLR and
+`vicreg_stable` is VICReg.
+
 ### Anomaly detection, proxy signals
 
 The autoencoder is trained on QCD only and scored by reconstruction MSE. The operating
@@ -155,8 +212,7 @@ condor_submit scripts/new_exp/raw_ae_qcd_smnorm_new_exp.sub
 
 # further proxy — HH->bbtautau; build its dataset first, or the jobs race to build it
 python scripts/prepare_newsig_smnorm.py
-condor_submit scripts/xai/submit/newsig.sub          # VCReg, SupCon, SimCLR
-condor_submit scripts/xai/submit/newsig_vicreg.sub   # VICReg
+condor_submit scripts/xai/submit/newsig.sub          # the four encoders
 condor_submit scripts/xai/submit/newsig_raw.sub      # raw-feature baseline
 ```
 
@@ -174,149 +230,82 @@ Check the measured false-positive rate on QCD in the output: it confirms the
 transferred threshold still lands where it should — 0.096 ± 0.004 against a nominal
 0.10 on the CASE production, 0.090 ± 0.002 for the raw baseline.
 
+### Scoring with published weights
+
+
+```bash
+bash scripts/download_weights.sh     # encoders + autoencoders, 2.3 GB into data/weights/
+
+python scripts/infer_new_signals.py --dataset case --model vcreg --dmodel 256 --seed 3 \
+    --encoder-ckpt data/weights/encoders/vcreg_d256_seed3.ckpt \
+    --ae-ckpt data/weights/autoencoders/vcreg_d256_seed3_ae.ckpt \
+    --out-dir outputs/ad_infer
+```
+
+`--dataset` picks the held-out set:
+
+| value | processes scored against QCD |
+|---|---|
+| `proxy` | VBF H→bb, HH→4b, ggH→ττ |
+| `newsig` | HH→bbττ |
+| `case` | `hToAA_4b_ma60` = H→aa→4b with m_a = 60 GeV, `hToAA_4tau_ma15` = H→aa→4τ with m_a = 15 GeV, `HVdilep_Zp1000_piD2_mumu` = hidden-valley Z′ (1 TeV) → n(μμ) |
+
 ---
 
 ## 4. Interpretability
 
-The autoencoder flags; the mixture only interprets, and is never used as an anomaly
-score. The whole stage runs on one encoder — VCReg, `d_model = 256`, seed 3 and one
-mixture: K = 7, diagonal covariance, fitted on a 64-dimensional PCA of the SM training
-embeddings. The autoencoder is the stage-3 one and keeps scoring the full 256-dim
-embedding; only the partition is projected.
+Reproduces Section 4.3 (Fig. 2, Table 6, the localisation, top-observable and Spearman
+figures) with the VCReg encoder (`d_model = 256`, seed 3) and the K = 7 mixture fitted on
+a 64-dimensional PCA of the SM training embeddings.
 
-The two signals interpreted are HH→4b (label 13) and Z′→n(μμ) (label 20, from the CASE production of stage 1). Run the steps in this order; the paths are those of the
-paper's runs, so change `NE`, `XP` and `FMD` to your own.
-
-[`notebooks/xai_reproduce_load.ipynb`](notebooks/xai_reproduce_load.ipynb) loads the saved
-embeddings (step 1) and K = 7 mixture (step 3), runs steps 2 and 5–7 into a separate
-output tree, then checks every number against the value printed in the paper. Its
-inputs (about 4 GB) are shared from CERNBox: `bash scripts/download_xai_data.sh`
-downloads, verifies and unpacks them into `data/`, where the notebook looks for them.
+### From scratch (CERN batch system and EOS)
 
 ```bash
-NE=/eos/user/d/dgenoves/anomaly_pipeline/new_exp
-XP=/eos/user/d/dgenoves/anomaly_pipeline/xai_paper
-FMD=/eos/user/d/dgenoves/foundation_model_testing_data
-RUN=vcreg_12class_nosparse_dmodel256_cern
-EMB=$NE/xai_embeddings_smnorm/$RUN/encoder_seed_3/embeddings
-ENC=$NE/$RUN/seed_3/checkpoints/epoch_014.ckpt
-AE=$NE/ad_results/$RUN/encoder_seed_3/mse_normal/checkpoints/ae-epochepoch=49.ckpt
-GMM=$XP/k_selection_v3/vcreg_d256_seed3_diag_pca64/gmm_K7.pkl
-MH=$XP/vcreg_d256_seed3_smnorm/04_profile/matched_sm_hh4b.npz
-MV=$XP/case_HVdilep_Zp1000_piD2_mumu_d256_seed3/matched_sm_HVdilep_Zp1000_piD2_mumu.npz
-PCA="--pca-dim 64 --pca-embeddings-dir $EMB --pca-seed 3"
-```
+source scripts/xai/paths.sh     # input and output paths; export any of them to override
 
-**1. Embeddings of the 12 SM classes and the signals.** The AD runs only embed QCD and the signals, so the mixture needs its own extraction (only `DMODEL=256` is used):
-
-```bash
+# 1. embeddings of the 12 SM classes and the signals
 condor_submit scripts/xai/submit/extract_xai_emb.sub
-```
 
-**2. Matched array** — SM and HH→4b test events with their embedding and physics
-observables, the population every later step profiles:
-
-```bash
+# 2. SM + HH->4b event array
 python scripts/xai/04_profile_and_rank.py --ckpt-path $ENC --signal-label 13 \
     --vectorized-dir $FMD/v2_nosparse_higgs_allsm_highlevel/vectorized/test \
     --preproc-split-dir $FMD/v2_nosparse_higgs_smnorm_highlevel/preprocessed/test \
     --save-matched $MH --output-dir $(dirname $MH)
-```
 
-Without `--gmm-path` the script stops once the array is saved: the array does not
-depend on the mixture, and step 3 needs it to fit one.
+# 3. mixtures, K = 5..12, in PCA 64 and unprojected
+condor_submit scripts/xai/submit/select_k_v4_pca_aggressive.sub
+condor_submit scripts/xai/submit/select_k_v3.sub
 
-**3. Mixtures.** `select_k_interpretable.py` fits K = 5…12 in each space:
+# 4. choice of K (Appendix A.4)
+condor_submit scripts/xai/submit/select_k_profiles.sub
+python paper/figures/make_k_occupancy.py
 
-```bash
-condor_submit scripts/xai/submit/select_k_v4_pca_aggressive.sub  # PCA 64 -> gmm_K7.pkl (16, 32 unused)
-condor_submit scripts/xai/submit/select_k_v3.sub                 # unprojected, for the comparison (256 only)
-```
-
-**4. Choice of K** (Appendix A.4). `select_k_profiles.py` reuses the mixtures above,
-fits K = 3, 4 itself, and records the occupancy of each component:
-
-```bash
-condor_submit scripts/xai/submit/select_k_profiles.sub   # unprojected and PCA 64
-python paper/figures/make_k_occupancy.py                 # k_occupancy.pdf
-```
-
-A component is populated if it holds at least `max(200, 0.2 N_SM / K)` events. In PCA
-64 every component is populated up to K = 7 and not beyond, so K = 7 is the finest
-usable partition; in the unprojected space no K in 3–12 qualifies. The script also
-tests for duplicate components, but no pair is flagged at any K, so occupancy alone
-decides.
-
-**5. Matched array for Z′→n(μμ)** — the CASE signal events next to the same SM block:
-
-```bash
+# 5. SM + Z'->n(mumu) event array
 python scripts/xai/build_matched_case.py --case-label HVdilep_Zp1000_piD2_mumu \
     --signal-label 20 --sm-matched $MH --ckpt $ENC --output $MV
+
+# 6. assignments, Wasserstein ranking, K +- 2 check and Spearman, for both signals
+bash scripts/xai/run_steps_03_06.sh
+
+# 7. figures and Table 6
+bash scripts/xai/make_figures.sh
 ```
 
-**6. Steps 03–06, per signal:**
+Re-running steps 1 and 3 does not give back the published embeddings and mixture
+exactly: extraction is not seeded, and the mixture is reproduced only inside
+`fm_testing.sif`. To reproduce the paper's numbers, use the published ones below.
 
-| Step | Script | Output | Used for |
-|---|---|---|---|
-| 03 | `03_assign_flagged.py` | `k7_<sig>_pca64_d256_seed3/03_assign_matched/` | localisation, top-observable, the Fig. 2 assignments |
-| 04 | `04_profile_and_rank.py` | `rank_k7_sm/<sig>/` | Table 6, per-component distributions |
-| 05 | `05_robustness_kpm2.py` | `k7_<sig>_pca64_d256_seed3/05_robustness/` | the K ± 2 check of Appendix A.4 |
-| 06 | `06_ae_mechanism.py` | `k7_<sig>_pca64_d256_seed3/06_ae_mechanism/` | Spearman figures |
+### With the public data (≈15 min, CPU)
 
 ```bash
-for spec in "hh4b 13 $MH" "hvdilep 20 $MV"; do
-  read t S M <<< "$spec"
-  K7=$XP/k7_${t}_pca64_d256_seed3
-  python scripts/xai/03_assign_flagged.py --matched-npz $M --signal-label $S \
-      --gmm-path $GMM --ae-checkpoint $AE --output-dir $K7/03_assign_matched \
-      --fpr 0.10 --ylim 0.95 $PCA
-  python scripts/xai/04_profile_and_rank.py --matched-npz $M --signal-label $S \
-      --gmm-path $GMM --ae-checkpoint $AE --output-dir $XP/rank_k7_sm/$t \
-      --min-frac 0.05 --fpr 0.10 $PCA
-  python scripts/xai/05_robustness_kpm2.py --embeddings-dir $EMB --matched-npz $M \
-      --signal-label $S --ae-checkpoint $AE --k 7 --gmm-dir $(dirname $GMM) \
-      --output-dir $K7/05_robustness --fpr 0.10 --min-frac 0.05 $PCA
-  python scripts/xai/06_ae_mechanism.py --matched-npz $M --gmm-path $GMM \
-      --ae-checkpoint $AE --profile-meta $XP/rank_k7_sm/$t/profile_meta.json \
-      --output-dir $K7/06_ae_mechanism $PCA
-done
+bash scripts/download_xai_data.sh     # 4 GB into data/: embeddings, mixture, checkpoints, test sets
+jupyter nbconvert --to notebook --execute notebooks/xai_reproduce_load.ipynb
 ```
 
-**7. Figures and tables of the paper:**
-
-```bash
-R=$XP/rank_k7_sm; D=paper/figures/xai
-H=$XP/k7_hh4b_pca64_d256_seed3; V=$XP/k7_hvdilep_pca64_d256_seed3
-
-# Fig. 2, component profiles (the script reads <run-dir>/04_profile/)
-mkdir -p $R/hh4b/04_profile
-cp $R/hh4b/profile_meta.json $R/hh4b/04_profile/
-ln -sf $MH $R/hh4b/04_profile/matched_sm_hh4b.npz
-python scripts/xai/plot_04_profiles.py --run-dir $R/hh4b \
-    --assignments $H/03_assign_matched/assignments.npz \
-    --mark '$HH \to 4b$:4,5' --mark '$Z^{\prime} \to n(\mu\mu)$:2' \
-    --output $D/component_profiles_K7.pdf
-
-# Spearman (only C2 is shown for Z')
-python scripts/xai/plot_06_convergence.py --run-dir $H --output $D/spearman_hh4b_K7.pdf
-python scripts/xai/plot_06_convergence.py --run-dir $V --components 2 \
-    --output $D/spearman_hvdilep_K7.pdf
-
-# localisation, top observable, Table 6
-cp $H/03_assign_matched/plots/flagged_assignment.pdf $D/localisation_hh4b_K7.pdf
-cp $V/03_assign_matched/plots/flagged_assignment.pdf $D/localisation_hvdilep_K7.pdf
-python paper/figures/make_top_observable.py    # top_observable_K7.pdf
-python paper/make_wasserstein_table.py         # sections/xai/wasserstein_side_by_side.tex
-
-# supplementary: per-component distributions
-cp $R/hh4b/plots/hh4b_vs_sm_k5.pdf              $D/dist8_hh4b_C5_K7.pdf
-cp $R/hh4b/plots/hh4b_vs_sm_k4.pdf              $D/dist8_hh4b_C4_K7.pdf
-cp $R/hvdilep/plots/hv_zp1000_mumu_vs_sm_k2.pdf $D/dist8_hvdilep_C2_K7.pdf
-cp $R/hvdilep/plots/hv_zp1000_mumu_vs_sm_k5.pdf $D/dist8_hvdilep_C5_K7.pdf
-cp $R/hh4b/plots/physics_per_component.pdf      $D/physics_per_component_K7.pdf
-```
-
----
+The notebook builds the event arrays, runs steps 03, 04 and 06, draws the figures and
+Table 6 into `outputs/xai_reproduce/figures/`, and checks every number against the paper.
+It needs a Python environment with the repository's requirements and Jupyter:
+`fm_testing.sif` does not include Jupyter.
 
 ---
 

@@ -90,6 +90,17 @@ DATASETS = {
         "classes": {0: "QCD_inclusive", 1: "hToAA_4b_ma60", 2: "hToAA_4tau_ma15",
                     3: "HVdilep_Zp1000_piD2_mumu"},
     },
+    # The three proxy signals of the main table, scored the same way. Their embeddings
+    # are the ones the AD stage already wrote next to the autoencoder it trained, so
+    # `emb_root` points there and nothing is extracted again; the labels kept in that
+    # file are the original positions (0, 12, 13, 14), not remapped. The experiment
+    # differs per model here, hence the {model} placeholder.
+    "proxy": {
+        "experiment": "new_exp/anomaly_embedding_{model}_smnorm",
+        "emb_root":   "ad_results",
+        "out_root":   "ad_results_proxy_infer",
+        "classes": {0: "QCD_inclusive", 12: "VBFHbb", 13: "HH_4b", 14: "ggHtautau"},
+    },
 }
 
 # Seed sets differ by model: the VCReg runs are indexed 0-4 while the contrastive
@@ -143,11 +154,22 @@ def main() -> int:
     ap.add_argument("--dataset", default="newsig", choices=list(DATASETS),
                     help="Which held-out signal set to score")
     ap.add_argument("--dry-run", action="store_true")
+    # Overrides for the published checkpoints, which carry their own names rather than
+    # the run/seed directory layout below. Defaults keep the paper's paths.
+    ap.add_argument("--encoder-ckpt", type=Path, default=None,
+                    help="Encoder checkpoint (default: the run's own epoch_*.ckpt)")
+    ap.add_argument("--ae-ckpt", type=Path, default=None,
+                    help="Autoencoder checkpoint, thresholds included "
+                         "(default: the run's own ae-epoch*.ckpt)")
+    ap.add_argument("--emb-dir", type=Path, default=None,
+                    help="Where the embeddings are read from, or written if absent")
+    ap.add_argument("--out-dir", type=Path, default=None,
+                    help="Where result_<dataset>.json is written")
     a = ap.parse_args()
 
     spec = MODELS[a.model]
     ds = DATASETS[a.dataset]
-    EXPERIMENT, CLASS_NAMES = ds["experiment"], ds["classes"]
+    EXPERIMENT, CLASS_NAMES = ds["experiment"].format(model=a.model), ds["classes"]
     if a.seed not in spec["seeds"]:
         print(f"Seed {a.seed} is not one of the {a.model} seeds {spec['seeds']}")
         return 1
@@ -155,11 +177,11 @@ def main() -> int:
     run = spec["run"].format(d=a.dmodel)
     seed_dir = NEW_EXP / run / f"seed_{a.seed}"
     ad_dir = NEW_EXP / "ad_results" / run / f"encoder_seed_{a.seed}"
-    ae_ckpt = find_ae_ckpt(ad_dir)
-    emb_dir = NEW_EXP / ds["emb_root"] / run / f"encoder_seed_{a.seed}" / "embeddings"
-    out_dir = NEW_EXP / ds["out_root"] / run / f"encoder_seed_{a.seed}"
+    ae_ckpt = a.ae_ckpt or find_ae_ckpt(ad_dir)
+    emb_dir = a.emb_dir or (NEW_EXP / ds["emb_root"] / run / f"encoder_seed_{a.seed}" / "embeddings")
+    out_dir = a.out_dir or (NEW_EXP / ds["out_root"] / run / f"encoder_seed_{a.seed}")
 
-    enc_ckpt = find_best_ckpt(seed_dir)
+    enc_ckpt = a.encoder_ckpt or find_best_ckpt(seed_dir)
     print(f"dataset     : {a.dataset}  ({EXPERIMENT})")
     print(f"model       : {a.model}  ({spec['class'].rsplit('.', 1)[-1]})")
     print(f"d_model     : {a.dmodel}   seed: {a.seed}")

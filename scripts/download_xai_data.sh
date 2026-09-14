@@ -43,7 +43,8 @@ for f in "${FILES[@]}"; do
     fi
 done
 
-(cd "${DL}" && sha256sum -c SHA256SUMS)
+# SHA256SUMS covers every archive of the share, so only check what was downloaded.
+(cd "${DL}" && sha256sum --ignore-missing -c SHA256SUMS)
 
 # The archives hold paths starting with data/, so they unpack into the repository root.
 for f in "${FILES[@]}"; do

@@ -70,6 +70,11 @@ selected these files checked every `.py`, `.sh`, `.sub` and `.yaml` in the repos
 
   They still point at `scripts/xai/submit/wrapper_*.sh`, so they cannot run from here.
 
+  `newsig_vicreg.sub` queued the four VICReg jobs of the HH->bbtautau evaluation in a
+  separate file, from a resubmission; `wrapper_newsig.sh` handles VICReg like any other
+  model, seed set included, so those four rows now sit in `newsig.sub` and the stage
+  mirrors the CASE one: one submitter for the four encoders, one for the raw baseline.
+
   Archived with them, the earlier K-selection machinery, which no published figure or
   table came from either. `01_select_k.py` (BIC/ARI scan) and `02_fit_gmm.py` fit the
   mixture the way the first drafts did; the paper's mixture is fitted by

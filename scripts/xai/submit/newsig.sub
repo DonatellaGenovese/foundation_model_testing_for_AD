@@ -2,8 +2,8 @@
 # Condor: anomaly detection on additional signal proxies (inference only).
 #   condor_submit scripts/xai/submit/newsig.sub
 #
-# One job per (model, d_model), five encoder seeds looped inside each: 12 jobs,
-# 60 evaluations. Nothing is trained — the encoders, the autoencoders and the
+# One job per (model, d_model), five encoder seeds looped inside each: 16 jobs,
+# 80 evaluations. Nothing is trained — the encoders, the autoencoders and the
 # val-calibrated thresholds all already exist.
 #
 # The shared dataset must exist before submitting: it is built by the first job
@@ -43,4 +43,8 @@ queue MODEL, DMODEL from (
   simclr, 64
   simclr, 128
   simclr, 256
+  vicreg, 32
+  vicreg, 64
+  vicreg, 128
+  vicreg, 256
 )

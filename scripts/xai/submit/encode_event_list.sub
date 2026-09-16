@@ -1,0 +1,28 @@
+# ================================
+# Condor: step 1 of the interpretability chain — encode the published event lists
+#   condor_submit scripts/xai/submit/encode_event_list.sub
+#
+# Encodes the events of $LISTS (scripts/xai/paths.sh) with the VCReg encoder (d_model 256,
+# seed 3) into $EMB. On an A100 inside fm_testing.sif the embeddings match the published
+# ones: val and test bit for bit, train on all but 150 of 1,433,738 events (within 2.3e-3),
+# which leaves Table 6 unchanged. Output: $EMB, exported before submitting (paths.sh
+# defaults it to the paper's embeddings, which the script refuses to overwrite).
+# ================================
+
+executable = scripts/xai/submit/wrapper_encode_event_list.sh
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/encode_event_list_$(ClusterId).out
+error   = $(log_dir)/encode_event_list_$(ClusterId).err
+log     = $(log_dir)/encode_event_list_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "workday"
+getenv         = False
+request_cpus   = 8
+request_gpus   = 1
+request_memory = 32000
+requirements   = regexp("A100", TARGET.GPUs_DeviceName)
+environment    = "EMB=$ENV(EMB)"
+
+queue

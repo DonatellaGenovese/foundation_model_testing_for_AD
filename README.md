@@ -254,17 +254,30 @@ python scripts/infer_new_signals.py --dataset case --model vcreg --dmodel 256 --
 
 ## 4. Interpretability
 
-Reproduces Section 4.3 (Fig. 2, Table 6, the localisation, top-observable and Spearman
-figures) with the VCReg encoder (`d_model = 256`, seed 3) and the K = 7 mixture fitted on
-a 64-dimensional PCA of the SM training embeddings.
-
-### From scratch (CERN batch system and EOS)
+### A. With the published embeddings and mixture (≈15 min, CPU)
 
 ```bash
-source scripts/xai/paths.sh     # input and output paths; export any of them to override
+bash scripts/download_xai_data.sh     # 4 GB into data/: embeddings, mixture, checkpoints, test sets, event lists
+jupyter nbconvert --to notebook --execute notebooks/xai_reproduce_load.ipynb
+```
 
-# 1. embeddings of the 12 SM classes and the signals
-condor_submit scripts/xai/submit/extract_xai_emb.sub
+The notebook builds the event arrays, runs steps 03, 04 and 06 with the published
+mixture, draws the figures and Table 6 into `outputs/xai_reproduce/figures/`, and checks
+every number against the paper. It does not refit the mixture, so the choice of K is not
+redone. It needs a Python environment with the repository's requirements and Jupyter:
+`fm_testing.sif` does not include Jupyter.
+
+### B. From the event lists (CERN batch system and EOS)
+
+Encodes again the events the published embeddings came from, then refits and recomputes everything downstream. The encoder input, the SM-normalised dataset, is on CERN EOS. Steps 1 and 3 are batch jobs; run the others inside `fm_testing.sif`
+(`apptainer shell --bind /afs,/eos fm_testing.sif`). Each step needs the previous ones.
+
+```bash
+export XP=<your directory> EMB=<your directory>/embeddings   # outputs
+source scripts/xai/paths.sh     # inputs on EOS; the published outputs are only read
+
+# 1. embeddings of the events listed in $LISTS. 
+condor_submit scripts/xai/submit/encode_event_list.sub
 
 # 2. SM + HH->4b event array
 python scripts/xai/04_profile_and_rank.py --ckpt-path $ENC --signal-label 13 \
@@ -272,40 +285,20 @@ python scripts/xai/04_profile_and_rank.py --ckpt-path $ENC --signal-label 13 \
     --preproc-split-dir $FMD/v2_nosparse_higgs_smnorm_highlevel/preprocessed/test \
     --save-matched $MH --output-dir $(dirname $MH)
 
-# 3. mixtures, K = 5..12, in PCA 64 and unprojected
-condor_submit scripts/xai/submit/select_k_v4_pca_aggressive.sub
-condor_submit scripts/xai/submit/select_k_v3.sub
+# 3. mixtures, K = 5..12, in PCA 64 and unprojected, and the choice of K (Appendix A.4)
+condor_submit scripts/xai/submit/k_scan.sub
+python paper/figures/make_k_occupancy.py --xp $XP/k_profiles --outdir $XP/figures
 
-# 4. choice of K (Appendix A.4)
-condor_submit scripts/xai/submit/select_k_profiles.sub
-python paper/figures/make_k_occupancy.py
-
-# 5. SM + Z'->n(mumu) event array
+# 4. SM + Z'->n(mumu) event array
 python scripts/xai/build_matched_case.py --case-label HVdilep_Zp1000_piD2_mumu \
     --signal-label 20 --sm-matched $MH --ckpt $ENC --output $MV
 
-# 6. assignments, Wasserstein ranking, K +- 2 check and Spearman, for both signals
+# 5. assignments, Wasserstein ranking, K +- 2 check and Spearman, for both signals
 bash scripts/xai/run_steps_03_06.sh
 
-# 7. figures and Table 6
-bash scripts/xai/make_figures.sh
+# 6. figures and Table 6
+FIG=$XP/figures TABLE=$XP/figures/wasserstein_side_by_side.tex bash scripts/xai/make_figures.sh
 ```
-
-Re-running steps 1 and 3 does not give back the published embeddings and mixture
-exactly: extraction is not seeded, and the mixture is reproduced only inside
-`fm_testing.sif`. To reproduce the paper's numbers, use the published ones below.
-
-### With the public data (≈15 min, CPU)
-
-```bash
-bash scripts/download_xai_data.sh     # 4 GB into data/: embeddings, mixture, checkpoints, test sets
-jupyter nbconvert --to notebook --execute notebooks/xai_reproduce_load.ipynb
-```
-
-The notebook builds the event arrays, runs steps 03, 04 and 06, draws the figures and
-Table 6 into `outputs/xai_reproduce/figures/`, and checks every number against the paper.
-It needs a Python environment with the repository's requirements and Jupyter:
-`fm_testing.sif` does not include Jupyter.
 
 ---
 

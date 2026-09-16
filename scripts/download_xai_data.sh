@@ -6,12 +6,13 @@
 #   bash scripts/download_xai_data.sh
 #
 # About 4 GB: the saved embeddings and K = 7 mixture, the encoder and autoencoder
-# checkpoints, the SM + HH->4b test sets, and the Z'->n(mumu) test set with its parquet.
+# checkpoints, the SM + HH->4b test sets, the Z'->n(mumu) test set with its parquet, and the
+# lists of the events the embeddings were computed from (data/event_lists/).
 set -euo pipefail
 
 # Public link of the folder holding the archives; override with XAI_SHARE_URL.
 SHARE="${XAI_SHARE_URL:-https://cernbox.cern.ch/s/KEq2Nv7PjB5W44y}"
-FILES=(xai_embeddings.tar xai_models.tar xai_testsets.tar xai_case_zprime.tar SHA256SUMS)
+FILES=(xai_embeddings.tar xai_models.tar xai_testsets.tar xai_case_zprime.tar xai_event_lists.tar SHA256SUMS)
 
 if [ -z "${SHARE}" ]; then
     echo "Set the public link first, e.g."

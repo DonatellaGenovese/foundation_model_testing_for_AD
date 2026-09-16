@@ -1,0 +1,36 @@
+# ================================
+# Condor: mixtures and choice of K for the interpretability chain (README stage 4)
+#   condor_submit scripts/xai/submit/k_scan.sub
+#
+# Two jobs, the two curves of the Appendix A.4 occupancy figure: the mixtures K = 5..12
+# fitted on the 64-component PCA of the SM training embeddings and on the unprojected
+# embeddings, each followed by the choice of K. The PCA job then numbers the components
+# of its K = 7 mixture like the published one, which the later steps and figures name
+# (C2, C4, C5).
+#
+# Reads $EMB and $MH and writes under $XP (scripts/xai/paths.sh), exported before
+# submitting. The wrapper refuses to write into the published outputs.
+#
+# Resources: at most 16 CPU / 32 GB. Asking for more routes the job to the `bigmcore`
+# hostgroup, which has a handful of slots and rarely a free one. The unprojected job
+# takes more than a day.
+# ================================
+
+executable = scripts/xai/submit/wrapper_k_scan.sh
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/k_scan_$(SPACE)_$(ClusterId).out
+error   = $(log_dir)/k_scan_$(SPACE)_$(ClusterId).err
+log     = $(log_dir)/k_scan_$(SPACE)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "nextweek"
+getenv         = False
+request_cpus   = $(CPUS)
+request_memory = $(MEM)
+environment    = "SPACE=$(SPACE) THREADS=$(CPUS) XP=$ENV(XP) EMB=$ENV(EMB)"
+
+queue SPACE, CPUS, MEM from (
+    pca64, 8, 24576
+    raw, 16, 32000
+)

@@ -88,7 +88,7 @@ def main() -> int:
         help="Blank a single cell when fewer than this share of the component's SM "
              "events yield a finite value. Mjj and |deta_jj| need two jets and MT needs "
              "a lepton, and the share that qualifies swings by component: Mjj is filled "
-             "by 33 of C1's 18,186 events (0.2%%) against all 29,106 of C2's, and MT by "
+             "by 0.2%% of C1's events against all of C2's, and MT by "
              "4.0%% of C3 against 92%% of C2. Those cells are precise --- C1's Mjj "
              "bootstraps to +-0.01 --- but they describe a fraction of a per cent of the "
              "region while sitting in a grid whose other cells describe all of it. "

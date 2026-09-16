@@ -137,8 +137,8 @@ def main() -> int:
         r"$W_1^{\text{QCD}}$, computed against the local QCD background (the autoencoder's "
         r"trained normality), is reported as a control baseline; it is undefined where a "
         r"component holds too few QCD events for the distance to be estimated, which is "
-        r"the case throughout C2, where a single QCD event falls among $29{,}106$ Standard "
-        r"Model ones. Observables are ranked by "
+        r"the case throughout C2, where a single QCD event falls among tens of thousands of "
+        r"Standard Model ones. Observables are ranked by "
         r"$W_1^{\text{SM}}$, with the top-ranked observable set in bold.}",
         r"\label{tab:wasserstein_rank}",
     ]

@@ -78,10 +78,10 @@ def main() -> int:
 
         bins = PHYSICS_BINS[cfg["var"]]
         ax.hist(vals[m_sm], bins=bins, density=True, histtype="step", lw=1.8,
-                color=OI["sm"], label=f"local SM  ($n=${m_sm.sum():,})")
+                color=OI["sm"], label="local SM")
         ax.hist(vals[m_sig], bins=bins, density=True, histtype="step", lw=1.8, ls="--",
                 color=OI["signal"],
-                label=f"{cfg['name']} flagged  ($n=${m_sig.sum():,})")
+                label=f"{cfg['name']} flagged")
 
         ax.set_xlabel(PHYSICS_LABELS[cfg["var"]], fontsize=11)
         ax.set_ylabel("Density", fontsize=10)

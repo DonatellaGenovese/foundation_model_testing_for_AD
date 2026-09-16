@@ -4,6 +4,13 @@ train_val_test_split_per_class: [9_960_000, 20_000, 20_000]
 num_workers: 6
 pin_memory: true
 
+# Seeds the order of the train shards and the shuffle buffers. It picks WHICH train
+# events are read, not only their order: each loader worker stops at
+# ceil(limit / num_workers) events per class, taking the first rows of its shards.
+# So a run is repeatable only at the same seed AND the same num_workers. Taken from the
+# top-level seed; train.py and eval_probes.py also pass it explicitly.
+seed: ${oc.select:seed,null}
+
 # Discard events in which every jet, electron, muon and photon slot has PT == 0,
 # i.e. nothing was reconstructed above the storage thresholds. Applied during
 # vectorisation, so it decides what the .npy shards contain and takes effect only

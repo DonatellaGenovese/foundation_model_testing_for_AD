@@ -174,7 +174,15 @@ def extract_and_save_embeddings(
     with omegaconf.open_dict(cfg):
         cfg.data.to_classify = needed_classes
 
-    datamodule: L.LightningDataModule = hydra.utils.instantiate(cfg.data)
+    # Pass the config seed, as train.py and eval_probes.py do. Without it the dataset
+    # shuffles the train shards with OS entropy, and since each loader worker stops at
+    # ceil(limit / num_workers) events per class, every run extracts a different train
+    # sample (and val in a different order). With it, the same config and num_workers
+    # give the same events in the same order.
+    datamodule: L.LightningDataModule = hydra.utils.instantiate(
+        cfg.data,
+        seed=cfg.get("seed", None),
+    )
     datamodule.prepare_data()
     datamodule.setup("fit")
     try:

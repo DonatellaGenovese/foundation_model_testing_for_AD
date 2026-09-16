@@ -48,7 +48,9 @@ class LocalVectorDataset(IterableDataset):
 
         # --- Global shuffle across all class shards ---
         if self.shuffle:
-            rng = random.Random(seed)  # explicit seed for determinism
+            # random.Random(None) would seed from OS entropy; fall back to the torch
+            # state instead, as ShuffleBuffer does, so a seeded run stays repeatable.
+            rng = random.Random(seed if seed is not None else torch.initial_seed() % 2**32)
             rng.shuffle(self.all_files)
 
     def __iter__(self):

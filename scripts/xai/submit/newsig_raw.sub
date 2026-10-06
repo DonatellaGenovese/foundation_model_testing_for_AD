@@ -3,7 +3,7 @@
 #   condor_submit scripts/xai/submit/newsig_raw.sub
 #
 # The Raw AE row of appendix Table 9 for HH->bbtautau. Same wrapper and strategy as
-# case_raw.sub -- mse_qcd, inference only, the val-calibrated threshold stored in the
+# case_v2_raw.sub -- mse_qcd, inference only, the val-calibrated threshold stored in the
 # checkpoint -- with only the dataset changed. Until this file existed that row had no
 # submitter anywhere in the tree.
 #

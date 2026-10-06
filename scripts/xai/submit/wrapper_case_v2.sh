@@ -1,8 +1,8 @@
 #!/bin/bash
 # HTCondor wrapper — anomaly detection on the CASE signals of the collide_v2 production.
 #
-# Same inference as wrapper_case.sh, on the tree with 50,000 events per signal instead
-# of 5,000. `--dataset case_v2` scores the 20,000 events per signal that
+# Inference only, on the tree with 50,000 events per signal: nothing is trained and no
+# threshold is recalibrated. `--dataset case_v2` scores the 20,000 events per signal that
 # scripts/select_case_events.py drew (the statistics of the proxy signals), against the
 # QCD reference HH->4b was scored against: the same 20,000 test events, embedded by the
 # same encoder. Embeddings are extracted once per model and seed, over the whole test
@@ -10,7 +10,7 @@
 #
 #   MODEL   vcreg | supcon | simclr | vicreg   (default vcreg)
 #   DMODEL  embedding dimension                (default 256)
-#   SEEDS   override the seed list             (default: per-model, as wrapper_case.sh)
+#   SEEDS   override the seed list             (default: the five seeds of each model)
 set -euo pipefail
 PROJECT_DIR=/afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD
 IMAGE=/eos/user/d/dgenoves/fm_testing.sif

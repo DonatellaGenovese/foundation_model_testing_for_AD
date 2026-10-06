@@ -117,4 +117,15 @@ selected these files checked every `.py`, `.sh`, `.sub` and `.yaml` in the repos
   The move was verified by resolving all 75 live experiment configs before and after:
   75 identical, 0 changed, 0 broken.
 
+- `superseded_submitters/xai/` also holds the submitters of the first CASE production
+  (5,000 events per signal), replaced in the paper by 20,000 events of collide_v2:
+  `case_ad.sub` + `wrapper_case.sh` (the four encoders) and `case_raw.sub` (the raw
+  baseline, through `wrapper_case_raw.sh`, which stays) scored the whole first-production
+  test split, and `xai_case.sub` + `wrapper_xai_case.sh` ran the Z'->n(mumu) half of the
+  interpretability chain on it, with the lepton count read from its parquet. The paper's
+  CASE rows come from `case_v2_ad.sub` and `case_v2_raw.sub`, and its Z' interpretability
+  from README stage 4. The first production can still be rebuilt and scored:
+  `prepare_case_smnorm.py --experiment new_exp/anomaly_case_smnorm --qcd-files-per-split 3`
+  and `--dataset case` in `infer_new_signals{,_raw}.py`.
+
 To restore something, move it back and check its `experiment=` target still exists.

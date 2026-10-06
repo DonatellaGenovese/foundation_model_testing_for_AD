@@ -19,9 +19,11 @@ same space; both datasets carry the same SM-only normalisation.
 
 ALIGNMENT. Physics come from the raw vectorised tree and embeddings from the
 preprocessed one, paired BY POSITION — the same trap documented in
-common/physics.build_matched_arrays. Here both trees hold one file of 4,984 events
-for the signal, read in sorted order, so the pairing is exact; the script checks the
-two lengths agree and refuses to continue otherwise.
+common/physics.build_matched_arrays. Here both trees hold the same shards for the
+signal (five of about 10,000 events in collide_v2), read in sorted order, so the
+pairing is exact; the script checks the two lengths agree and refuses to continue
+otherwise. The selection of scripts/select_case_events.py (the paper's 20,000 events)
+is applied after the pairing, by the same positions.
 
 Usage:
     python scripts/xai/build_matched_case.py \\
@@ -47,12 +49,14 @@ import numpy as np
 from common.constants import PHYSICS_VARS, SM_INDICES
 from common.physics import compute_physics, load_matched_npz, save_matched_npz
 
+# The collide_v2 CASE tree (50,000 events per signal) the paper uses, built by
+# scripts/prepare_case_smnorm.py.
 CASE_DATA = Path("/eos/user/d/dgenoves/foundation_model_testing_data/"
-                 "v2_nosparse_case_smnorm_highlevel")
+                 "v3_nosparse_case_smnorm_highlevel")
 # Symlink tree the CASE config reads from, one entry per process pointing into the b2g
-# production. Used here to reach the reconstructed object lists, which the vectorised
-# arrays no longer carry once they have been truncated to the per-group top-k.
-CASE_SRC = Path("/eos/user/d/dgenoves/foundation_model_testing_data/_case_src")
+# production. Only needed without a selection file: the selection already carries the
+# untruncated muon and electron counts, read from these parquet files when it was drawn.
+CASE_SRC = Path("/eos/user/d/dgenoves/foundation_model_testing_data/_case_src_v2")
 
 
 def load_shards(d: Path, max_events: int = 0) -> np.ndarray:
@@ -70,12 +74,12 @@ def true_lepton_count(case_label: str, n_expect: int,
     compute_physics() counts leptons off the padded arrays, which keep at most eight
     muons and eight electrons. For every Standard Model process and for the proxy
     signals that cap is never reached --- their maxima are six and seven --- so the two
-    counts agree. The dimuon signal is the exception: 38% of its events have more than
-    eight muons, the true multiplicity runs to 23, and counting off the padded array
-    turns a smooth distribution into a 43% spike sitting exactly on the cap. That spike
-    is a property of the input pipeline, not of the events, so the observable is read
-    from the reconstructed lists instead and the truncation is stated in the text as a
-    limit of what the encoder sees.
+    counts agree. The dimuon signal is the exception: 28% of the 20,000 events the paper
+    uses have more than eight muons, the true multiplicity runs to 23, and counting off
+    the padded array turns a smooth distribution into a 37% spike sitting exactly on the
+    cap. That spike is a property of the input pipeline, not of the events, so the
+    observable is read from the reconstructed lists instead and the truncation is stated
+    in the text as a limit of what the encoder sees.
 
     Events with no reconstructed objects at all are dropped upstream, so they are
     removed here too; the caller checks the resulting length against the embeddings.
@@ -119,6 +123,11 @@ def main() -> int:
     p.add_argument("--ckpt", type=Path, required=True, help="Encoder checkpoint")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--max-signal", type=int, default=0, help="0 = all available")
+    p.add_argument("--select", default="auto",
+                   help="npz from scripts/select_case_events.py: use only the events it lists, "
+                        "in shard order. 'auto' (default) takes <case-data>/selections/"
+                        "<case-label>_random.npz, the 20,000 events the paper uses, when it "
+                        "exists; 'none' uses every event of the test split.")
     p.add_argument("--case-data", type=Path, default=CASE_DATA,
                    help="CASE dataset tree with vectorized/ and preprocessed/ (stage 1)")
     p.add_argument("--case-src", type=Path, default=CASE_SRC,
@@ -173,7 +182,23 @@ def main() -> int:
 
     phys_sig = compute_physics(X_raw)
 
-    true_nlep = true_lepton_count(args.case_label, len(X_raw), args.case_src)
+    select = None
+    if args.select == "auto":
+        cand = args.case_data / "selections" / f"{args.case_label}_random.npz"
+        select = cand if cand.exists() else None
+        if select is None:
+            print(f"no selection at {cand}: using every event of the test split")
+    elif args.select.lower() != "none":
+        select = Path(args.select)
+    sel = np.load(select) if select is not None else None
+
+    # The untruncated lepton multiplicity: from the selection file when it carries it (it
+    # was read from the parquet when the events were drawn), otherwise from the parquet.
+    true_nlep = None
+    if sel is not None and "n_muons" in sel.files:
+        print("n_leptons taken from the selection file (untruncated muon + electron counts)")
+    else:
+        true_nlep = true_lepton_count(args.case_label, len(X_raw), args.case_src)
     if true_nlep is not None:
         trunc = phys_sig["n_leptons"]
         n_capped = int((trunc >= 8).sum())
@@ -181,6 +206,25 @@ def main() -> int:
         print(f"n_leptons read from the parquet: median {np.median(true_nlep):.0f}, "
               f"max {true_nlep.max():.0f}; {n_capped:,} events ({n_capped/len(trunc)*100:.1f}%) "
               f"were sitting on the eight-muon cap")
+
+    # The selection is applied here, after the physics: the parquet multiplicities are
+    # paired with the shards by position, over the whole sample.
+    if sel is not None:
+        idx = sel["index"].astype(int)
+        if idx.max() >= len(X_pp):
+            print(f"SELECTION OUT OF RANGE: index {idx.max()} for {len(X_pp):,} events")
+            return 1
+        X_pp = X_pp[idx]
+        phys_sig = {k: v[idx] for k, v in phys_sig.items()}
+        if "n_muons" in sel.files:
+            trunc = phys_sig["n_leptons"]
+            nlep = (sel["n_muons"].astype(float) + sel["n_electrons"].astype(float))
+            phys_sig["n_leptons"] = nlep
+            cut = nlep > trunc
+            print(f"n_leptons: median {np.median(nlep):.0f}, max {nlep.max():.0f}; "
+                  f"{int(cut.sum()):,} events ({cut.mean()*100:.1f}%) have more leptons than "
+                  f"the eight per flavour the encoder input keeps")
+        print(f"selection {select.name}: {len(idx):,} of {len(X_raw):,} events")
 
     import torch
     sys.path.insert(0, str(_XAI))

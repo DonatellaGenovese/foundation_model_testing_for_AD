@@ -38,7 +38,7 @@ import numpy as np
 from common.constants import PHYSICS_BINS, PHYSICS_LABELS, SM_INDICES
 from common.style import OI
 
-DEFAULT_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper")
+DEFAULT_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper_v2")
 DEFAULT_OUT = Path(__file__).resolve().parent / "xai" / "top_observable_K7.pdf"
 
 

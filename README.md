@@ -278,7 +278,7 @@ from CERN EOS.
 ### A. With the published embeddings and mixture (≈15 min, CPU)
 
 ```bash
-bash scripts/download_xai_data.sh     # 4 GB into data/: embeddings, mixture, checkpoints, test sets, event lists
+bash scripts/download_xai_data.sh     # 3.4 GB into data/: embeddings, mixture, checkpoints, test sets, event lists
 jupyter nbconvert --to notebook --execute notebooks/xai_reproduce_load.ipynb
 ```
 
@@ -310,7 +310,7 @@ python scripts/xai/04_profile_and_rank.py --ckpt-path $ENC --signal-label 13 \
 condor_submit scripts/xai/submit/k_scan.sub
 python paper/figures/make_k_occupancy.py --xp $XP/k_profiles --outdir $XP/figures
 
-# 4. SM + Z'->n(mumu) event array
+# 4. SM + Z'->n(mumu) event array, the 20,000 events selected in stage 1
 python scripts/xai/build_matched_case.py --case-label HVdilep_Zp1000_piD2_mumu \
     --signal-label 20 --sm-matched $MH --ckpt $ENC --output $MV
 

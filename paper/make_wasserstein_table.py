@@ -27,11 +27,11 @@ import csv
 import json
 from pathlib import Path
 
-DEFAULT_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper/rank_k7_sm")
+DEFAULT_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper_v2/rank_k7_sm")
 DEFAULT_OUT = Path(__file__).resolve().parent / "sections" / "xai" / "wasserstein_side_by_side.tex"
 
 # Components holding less than this share of the flagged signal are left out. Step 04
-# populates the ranking down to 5%, which for the dimuon signal admits C5 at 7.8%
+# populates the ranking down to 5%, which for the dimuon signal admits C5 at 7.2%
 # against C2's 88% --- a second block carrying a fourteenth of the events, whose middle
 # ranks are not separable by bootstrap and whose figure counterpart (Fig. 5b, drawn with
 # --components) already omits it. At 10% the same rule keeps both HH->4b components,
@@ -129,17 +129,14 @@ def main() -> int:
         r"\caption{Local discriminating power of the high-level observables within the "
         r"mixture components that hold the AE-flagged signal, for $HH \rightarrow 4b$ "
         r"(left) and $Z^{\prime} \to n(\mu\mu)$ (right). Only components holding at least "
-        rf"${args.min_frac * 100:.0f}\%$ of the flagged signal are reported; "
-        r"$Z^{\prime} \to n(\mu\mu)$ places $88\%$ of its flagged events in C2. "
-        r"$W_1^{\text{SM}}$ is the "
-        r"Wasserstein-1 distance between the flagged signal and the local Standard Model "
-        r"background, standardised by each observable's global standard deviation. "
-        r"$W_1^{\text{QCD}}$, computed against the local QCD background (the autoencoder's "
-        r"trained normality), is reported as a control baseline; it is undefined where a "
-        r"component holds too few QCD events for the distance to be estimated, which is "
-        r"the case throughout C2, where a single QCD event falls among tens of thousands of "
-        r"Standard Model ones. Observables are ranked by "
-        r"$W_1^{\text{SM}}$, with the top-ranked observable set in bold.}",
+        rf"${args.min_frac * 100:.0f}\%$ of the flagged signal are reported. "
+        r"$W_1^{\text{SM}}$ is the Wasserstein-1 distance between the flagged signal and "
+        r"all SM events assigned to the same component, irrespective of their anomaly "
+        r"score, standardised by the standard deviation of each observable over the SM "
+        r"population. $W_1^{\text{QCD}}$, computed against the local QCD background (the "
+        r"autoencoder's trained normality), is reported as a control baseline. "
+        r"Observables are ranked by $W_1^{\text{SM}}$, with the top-ranked observable set "
+        r"in bold. C2 is essentially free of QCD, so the control cannot be computed there.}",
         r"\label{tab:wasserstein_rank}",
     ]
     for i, (slug, name) in enumerate(SIGNALS):

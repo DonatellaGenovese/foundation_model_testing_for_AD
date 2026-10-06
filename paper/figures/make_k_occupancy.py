@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 
 from common.style import OI
 
-DEFAULT_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper/k_profiles")
+DEFAULT_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper_v2/k_profiles")
 FLOOR = 0.2          # must match `min_share` in select_k_profiles.py
 K_SELECTED = 7
 

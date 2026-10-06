@@ -8,7 +8,7 @@
 # your own: PUB, the published outputs, is only ever read.
 
 : "${NE:=/eos/user/d/dgenoves/anomaly_pipeline/new_exp}"             # encoder and AE runs
-: "${PUB:=/eos/user/d/dgenoves/anomaly_pipeline/xai_paper}"          # published outputs (read only)
+: "${PUB:=/eos/user/d/dgenoves/anomaly_pipeline/xai_paper_v2}"       # published outputs (read only)
 : "${XP:=$PUB}"                                                     # interpretability outputs
 : "${FMD:=/eos/user/d/dgenoves/foundation_model_testing_data}"       # datasets
 : "${RUN:=vcreg_12class_nosparse_dmodel256_cern}"

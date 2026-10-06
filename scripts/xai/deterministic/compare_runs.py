@@ -30,7 +30,7 @@ import numpy as np
 
 PUB_EMB = Path("/eos/user/d/dgenoves/anomaly_pipeline/new_exp/xai_embeddings_smnorm/"
                "vcreg_12class_nosparse_dmodel256_cern/encoder_seed_3/embeddings")
-PUB_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper")
+PUB_XP = Path("/eos/user/d/dgenoves/anomaly_pipeline/xai_paper_v2")
 REPO = Path(__file__).resolve().parents[3]
 KDIR = "k_selection_v3/vcreg_d256_seed3_diag_pca64"
 

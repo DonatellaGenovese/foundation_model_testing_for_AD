@@ -15,9 +15,12 @@ settled by a 0.04 difference in mean |rho|, producing the run's only apparent
 divergence. The Spearman correlation is estimated over thousands of flagged
 events and needs no tie-break, so it is the statistic to show.
 
-The bar for the observable that step 04 ranked first by Wasserstein distance is
-drawn in the highlight colour and marked, so agreement between the geometric and
-the mechanistic explanation is visible rather than asserted.
+Two bars carry a hue and a marker: the observable that step 04 ranked first by
+Wasserstein distance (vermillion, star) and the observable whose correlation with the
+score is largest in magnitude (green, diamond), each labelled with its rho. Where the
+two routes agree they fall on the same bar, which then carries both markers; where they
+part, as for the dimuon signal in C2, the gap between the two labelled bars is the
+point of the figure.
 
 Components are identified as C<k> only: the paper characterises them by physics,
 never by a dominant process label.
@@ -49,11 +52,10 @@ import numpy as np
 from common.constants import PHYSICS_LABELS, PHYSICS_VARS
 from common.style import OI
 
-# The message here is "one bar among many", so only the observable step 5 ranked
-# first carries a hue; the rest recede to grey. A second saturated colour would
-# compete with the highlight and blunt the point.
+# Only the two observables the argument is about carry a hue; the rest recede to grey.
 C_BASE = OI["neutral"]
 C_HIGHLIGHT = OI["signal"]
+C_TOPRHO = OI["latent"]
 
 
 def load(run_dir: Path):
@@ -105,7 +107,7 @@ def main() -> int:
     order = sorted(PHYSICS_VARS, key=lambda v: abs(lead_rho.get(v, {}).get("rho", 0.0)))
 
     n = len(results)
-    fig, axes = plt.subplots(1, n, figsize=(4.6 * n, 3.9), sharex=True)
+    fig, axes = plt.subplots(1, n, figsize=(4.6 * n + 0.6 * (n == 1), 3.9 + 0.5 * (n == 1)), sharex=True)
     if n == 1:
         axes = [axes]
 
@@ -113,14 +115,16 @@ def main() -> int:
         r["spearman_mse_vs_physics"][args.group].get(v, {}).get("rho", np.nan)
         for r in results for v in order
     ]
-    lim = max(0.15, 1.15 * np.nanmax(np.abs(all_rho)))
+    lim = max(0.15, 1.55 * np.nanmax(np.abs(all_rho)))   # room for the rho labels
 
     for ax, r in zip(axes, results):
         comp = int(r["component"])
         rho_map = r["spearman_mse_vs_physics"][args.group]
         rhos = [rho_map.get(v, {}).get("rho", np.nan) for v in order]
         win = winners.get(comp)
-        colors = [C_HIGHLIGHT if v == win else C_BASE for v in order]
+        top = max(order, key=lambda v: abs(np.nan_to_num(rho_map.get(v, {}).get("rho", 0.0))))
+        colors = [C_HIGHLIGHT if v == win else C_TOPRHO if v == top else C_BASE
+                  for v in order]
 
         y = np.arange(len(order))
         ax.barh(y, rhos, color=colors, height=0.62)
@@ -135,32 +139,40 @@ def main() -> int:
         for s in ("top", "right"):
             ax.spines[s].set_visible(False)
 
-        # Secondary encoding: the highlight is never carried by colour alone.
-        if win in order:
-            i = order.index(win)
+        # Secondary encoding: the highlight is never carried by colour alone. Each
+        # highlighted bar gets its marker(s) and its rho, so the gap between the two
+        # routes can be read off the figure rather than estimated from bar lengths.
+        for v in dict.fromkeys([win, top]):
+            if v not in order:
+                continue
+            i = order.index(v)
             val = rhos[i]
-            ax.annotate(
-                "$\\bigstar$",
-                xy=(val, i),
-                xytext=(6 if val >= 0 else -6, 0),
-                textcoords="offset points",
-                va="center", ha="left" if val >= 0 else "right",
-                fontsize=11, color=C_HIGHLIGHT,
-            )
+            marks = [(r"$\bigstar$", C_HIGHLIGHT)] * (v == win) + [("◆", C_TOPRHO)] * (v == top)
+            label = "".join(m for m, _ in marks)
+            sign = 1 if val >= 0 else -1
+            ax.annotate(f"{val:+.2f}", xy=(val, i), xytext=(5 * sign, 0),
+                        textcoords="offset points", va="center",
+                        ha="left" if sign > 0 else "right", fontsize=8.5, color="0.15")
+            for k, (m, c) in enumerate(marks):
+                ax.annotate(m, xy=(val, i), xytext=(sign * (33 + 11 * k), 0),
+                            textcoords="offset points", va="center",
+                            ha="left" if sign > 0 else "right", fontsize=10, color=c)
 
     handles = [
         plt.Rectangle((0, 0), 1, 1, color=C_HIGHLIGHT),
+        plt.Rectangle((0, 0), 1, 1, color=C_TOPRHO),
         plt.Rectangle((0, 0), 1, 1, color=C_BASE),
     ]
     fig.legend(
         handles,
-        [r"top-ranked by $W_1$ (step 5)  $\bigstar$", "other observables"],
-        loc="lower center", ncol=2, frameon=False, fontsize=9,
+        [r"top-ranked by $W_1$  $\bigstar$", r"largest $|\rho|$ with AE score  ◆",
+         "other observables"],
+        loc="lower center", ncol=3 if n > 1 else 1, frameon=False, fontsize=9,
         bbox_to_anchor=(0.5, -0.02),
     )
     # No suptitle: the figure is a subfigure inside a float whose caption already says
     # what is plotted, and repeating it above the panels only steals vertical space.
-    fig.tight_layout(rect=(0, 0.06, 1, 1.0))
+    fig.tight_layout(rect=(0, 0.06 if n > 1 else 0.17, 1, 1.0))   # a one-column legend is taller
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved {out}")

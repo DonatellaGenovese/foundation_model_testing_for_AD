@@ -1,0 +1,45 @@
+# ================================
+# Condor: anomaly detection on the CASE signals of the collide_v2 production.
+#   condor_submit scripts/xai/submit/case_v2_ad.sub
+#
+# One job per (model, d_model); each scores every seed on the 20,000 events per
+# signal drawn in stage 1. Embeddings are extracted once per model and seed, over the
+# whole test split, and the selection is applied to them.
+# ================================
+executable = scripts/xai/submit/wrapper_case_v2.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/case_v2_ad_$(MODEL)_d$(DMODEL)_$(ClusterId).out
+error   = $(log_dir)/case_v2_ad_$(MODEL)_d$(DMODEL)_$(ClusterId).err
+log     = $(log_dir)/case_v2_ad_$(MODEL)_d$(DMODEL)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = False
+request_cpus   = 8
+request_gpus   = 1
+request_memory = 32768
+
+Requirements   = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+environment = "MODEL=$(MODEL) DMODEL=$(DMODEL) OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue MODEL, DMODEL from (
+  vcreg,  32
+  vcreg,  64
+  vcreg,  128
+  vcreg,  256
+  supcon, 32
+  supcon, 64
+  supcon, 128
+  supcon, 256
+  simclr, 32
+  simclr, 64
+  simclr, 128
+  simclr, 256
+  vicreg, 32
+  vicreg, 64
+  vicreg, 128
+  vicreg, 256
+)

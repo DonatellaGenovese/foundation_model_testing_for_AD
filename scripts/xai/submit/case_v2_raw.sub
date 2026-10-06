@@ -1,0 +1,24 @@
+# ================================
+# Condor: raw-feature AE baseline on the CASE signals of the collide_v2 production,
+# the same 20,000 events per signal as the encoders (--dataset case_v2), scored against
+# the QCD test events of the published raw HH->4b row.
+#   condor_submit scripts/xai/submit/case_v2_raw.sub
+# ================================
+executable = scripts/xai/submit/wrapper_case_raw.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/case_v2_raw_$(ClusterId).out
+error   = $(log_dir)/case_v2_raw_$(ClusterId).err
+log     = $(log_dir)/case_v2_raw_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = False
+request_cpus   = 8
+request_memory = 24576
+
+# DATASET set explicitly: the wrapper defaults to the first CASE production.
+environment = "DATASET=case_v2 OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue

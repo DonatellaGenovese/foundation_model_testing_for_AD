@@ -2,10 +2,14 @@
 # Condor: build the CASE held-out-signal dataset.
 #   condor_submit scripts/xai/submit/prepare_case.sub
 #
-# Vectorises the three CASE processes plus QCD_inclusive and applies the SM-only
-# normalisation in apply_only mode, so the signals land on the scale the encoder was
-# trained with without ever contributing to it. Resources stay well below the
-# bigmcore threshold (16 CPU / 64 GB), which routes to a 10-slot partition.
+# Vectorises the three CASE processes of the collide_v2 production (50,000 events
+# each) plus QCD_inclusive, applies the SM-only normalisation in apply_only mode, so
+# the signals land on the scale the encoder was trained with without ever contributing
+# to it, then draws the 20,000 events per signal the paper scores. Resources stay well
+# below the bigmcore threshold (16 CPU / 64 GB), which routes to a 10-slot partition.
+#
+# The first production (5,000 events per signal):
+#   environment = "EXPERIMENT=new_exp/anomaly_case_smnorm QCD_FILES=3 SELECT=0 ..."
 # ================================
 
 executable = scripts/xai/submit/wrapper_prepare_case.sh
@@ -18,7 +22,7 @@ log     = $(log_dir)/prepare_case_$(ClusterId).log
 
 run_as_owner   = True
 +JobFlavour    = "tomorrow"
-getenv         = True
+getenv         = False
 request_cpus   = 8
 request_memory = 32768
 

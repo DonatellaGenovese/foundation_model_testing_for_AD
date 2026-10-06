@@ -75,9 +75,22 @@ that file.
 The held-out processes are normalised with the statistics fitted above.
 
 ```bash
-python scripts/preprocess_smnorm.py        # 12 SM + VBF H->bb, HH->4b, ggH->tautau
-python scripts/prepare_newsig_smnorm.py    # QCD + HH->bbtautau
-python scripts/prepare_case_smnorm.py      # QCD + H->aa->4b, H->aa->4tau, Z'->n(mumu)
+python scripts/preprocess_smnorm.py              # 12 SM + VBF H->bb, HH->4b, ggH->tautau
+python scripts/prepare_newsig_smnorm.py          # QCD + HH->bbtautau
+condor_submit scripts/xai/submit/prepare_case.sub   # QCD + H->aa->4b, H->aa->4tau, Z'->n(mumu)
+```
+
+The CASE signals come from the collide_v2 production, 50,000 events each. The paper
+uses 20,000 per signal, the same number as each proxy signal: the job draws them
+uniformly (seed 42) with `scripts/select_case_events.py` and writes the choice to
+`v3_nosparse_case_smnorm_highlevel/selections/`. Every later step reads it from there.
+By hand, the same job is:
+
+```bash
+python scripts/prepare_case_smnorm.py
+for s in hToAA_4b_ma60 hToAA_4tau_ma15 HVdilep_Zp1000_piD2_mumu; do
+    python scripts/select_case_events.py --case-label $s
+done
 ```
 
 
@@ -222,13 +235,18 @@ Inference only: nothing is trained and no threshold is recalibrated, so these
 processes are held out in the strongest sense.
 
 ```bash
-condor_submit scripts/xai/submit/case_ad.sub     # the four encoders
-condor_submit scripts/xai/submit/case_raw.sub    # raw-feature baseline
+condor_submit scripts/xai/submit/case_v2_ad.sub     # the four encoders
+condor_submit scripts/xai/submit/case_v2_raw.sub    # raw-feature baseline
 ```
 
+Each signal is scored on its 20,000 selected events (stage 1). The QCD reference is the
+one the proxy signals were scored against: the same QCD test events, scored by the same
+model, so the rows of the two tables share one background.
+
 Check the measured false-positive rate on QCD in the output: it confirms the
-transferred threshold still lands where it should — 0.096 ± 0.004 against a nominal
-0.10 on the CASE production, 0.090 ± 0.002 for the raw baseline.
+transferred threshold still lands where it should — 0.098 ± 0.003 against a nominal
+0.10 for the encoders, 0.100 for the raw baseline. `python paper/make_heldout_bsm_table.py`
+then collects the seeds into the held-out table of the paper.
 
 ### Scoring with published weights
 
@@ -236,7 +254,7 @@ transferred threshold still lands where it should — 0.096 ± 0.004 against a n
 ```bash
 bash scripts/download_weights.sh     # encoders + autoencoders, 2.3 GB into data/weights/
 
-python scripts/infer_new_signals.py --dataset case --model vcreg --dmodel 256 --seed 3 \
+python scripts/infer_new_signals.py --dataset case_v2 --model vcreg --dmodel 256 --seed 3 \
     --encoder-ckpt data/weights/encoders/vcreg_d256_seed3.ckpt \
     --ae-ckpt data/weights/autoencoders/vcreg_d256_seed3_ae.ckpt \
     --out-dir outputs/ad_infer
@@ -248,7 +266,10 @@ python scripts/infer_new_signals.py --dataset case --model vcreg --dmodel 256 --
 |---|---|
 | `proxy` | VBF H→bb, HH→4b, ggH→ττ |
 | `newsig` | HH→bbττ |
-| `case` | `hToAA_4b_ma60` = H→aa→4b with m_a = 60 GeV, `hToAA_4tau_ma15` = H→aa→4τ with m_a = 15 GeV, `HVdilep_Zp1000_piD2_mumu` = hidden-valley Z′ (1 TeV) → n(μμ) |
+| `case_v2` | `hToAA_4b_ma60` = H→aa→4b with m_a = 60 GeV, `hToAA_4tau_ma15` = H→aa→4τ with m_a = 15 GeV, `HVdilep_Zp1000_piD2_mumu` = hidden-valley Z′ (1 TeV) → n(μμ); 20,000 events each, from collide_v2 |
+
+The held-out datasets, the CASE selections and the QCD reference of `case_v2` are read
+from CERN EOS.
 
 ---
 

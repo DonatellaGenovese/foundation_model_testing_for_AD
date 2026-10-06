@@ -8,28 +8,35 @@ the new signals land on the scale the encoder was trained with and never contrib
 to defining it. The script fails if the statistics change, which is the only way
 `apply_only` can go wrong silently.
 
-ONE THING IS DIFFERENT, AND IT MATTERS. Every CASE process has exactly one parquet
-file of 5,000 events, whereas the COLLIDE-2V proxies have hundreds (HH_bbtautau
-210). `make_split_manifest` assigns *whole files* greedily, filling train,
-then val, then test:
+ONE THING IS DIFFERENT, AND IT MATTERS. Every CASE process comes in a handful of
+parquet files (collide_v2: five of 10,000 events; the first production: one of
+5,000), whereas the COLLIDE-2V proxies have hundreds (HH_bbtautau 210).
+`make_split_manifest` assigns *whole files* greedily, filling train, then val, then
+test:
 
     for fname, n in items:
         buckets[split_names[split_idx]].append(fname)
         acc += n
         if acc >= targets_abs[split_idx]: split_idx += 1
 
-With a single file, the first iteration puts it in `train` and the loop ends — val
-and test come out empty. Every downstream step reads the *test* split, so the
+With few files, train takes all of them before its target is reached — val and test
+come out empty. Every downstream step reads the *test* split, so the
 automatic manifest would silently produce a dataset with no signal in it at all.
 
 So the manifest is built here instead, and passed to `vectorize_to_local` as a dict
-(it accepts one, and skips its own construction when given). Each signal's single
-file goes to test; QCD_inclusive, which has 13k files, gets real files in all three
-splits because it is the reference population for the false-positive rate.
+(it accepts one, and skips its own construction when given). Each signal's files go
+to test; QCD_inclusive, which has 13k files, gets real files in all three splits.
+
+The default is the collide_v2 production the paper reports (experiment
+new_exp/anomaly_case_v2_smnorm, 50,000 events per signal). The paper scores 20,000 of
+them per signal, drawn by scripts/select_case_events.py once this tree exists.
 
 Usage:
     python3 scripts/prepare_case_smnorm.py --dry-run
     python3 scripts/prepare_case_smnorm.py
+    # first production (5,000 events per signal)
+    python3 scripts/prepare_case_smnorm.py --experiment new_exp/anomaly_case_smnorm \
+        --qcd-files-per-split 3
 """
 
 import argparse
@@ -51,14 +58,13 @@ from src.train_full_anomaly_pipeline import _compose_cfg
 
 DATA        = Path("/eos/user/d/dgenoves/foundation_model_testing_data")
 STATS_LABEL = "v2_12class_nosparse_highlevel"        # SM-only statistics, no signal
-DST_LABEL   = "v2_nosparse_case_smnorm_highlevel"
-EXPERIMENT  = "new_exp/anomaly_case_smnorm"
+EXPERIMENT  = "new_exp/anomaly_case_v2_smnorm"      # collide_v2, the paper's samples
 NORMAL      = "QCD_inclusive"
-QCD_FILES_PER_SPLIT = 3                              # ~30k events per split
+QCD_FILES_PER_SPLIT = 7                              # ~57k events per split
 
 
 def build_manifest(base_dir: Path, folder_map: dict, classnames: list,
-                   event_db: dict) -> dict:
+                   event_db: dict, qcd_files_per_split: int = QCD_FILES_PER_SPLIT) -> dict:
     """Every class gets files in every split; only `test` is ever read downstream.
 
     Returns {folder: {"train": [...], "val": [...], "test": [...]}} with bare
@@ -69,7 +75,7 @@ def build_manifest(base_dir: Path, folder_map: dict, classnames: list,
     (split, class) pair and returns False the moment one of them has no `_x.npy`
     files. Leaving the signals out of train and val — the natural choice, since only
     test is used — therefore makes the datamodule raise before any inference runs.
-    Each signal has a single 5,000-event file, so it is listed in all three splits;
+    Each signal has only a few files, so they are listed in all three splits;
     the same events are vectorised three times and only the test copy is read, by
     infer_new_signals.py, which loads `test_embeddings.npz` alone. Duplicating rows
     in a split nothing trains on is harmless; an unbuildable datamodule is not.
@@ -92,10 +98,13 @@ def build_manifest(base_dir: Path, folder_map: dict, classnames: list,
                 f"count database; has_enough_events would raise KeyError"
             )
         if cname == NORMAL:
-            k = QCD_FILES_PER_SPLIT
+            k = qcd_files_per_split
             manifest[folder] = {"train": files[:k], "val": files[k:2 * k],
                                 "test": files[2 * k:3 * k]}
         else:
+            # All files in every split: has_enough_events requires each (split, class)
+            # pair to reach the configured per-class count, so train and val need the
+            # same events as test even though only test is read downstream.
             manifest[folder] = {"train": files, "val": files, "test": files}
     return manifest
 
@@ -109,12 +118,22 @@ def main() -> int:
                          "two would treat signal and background differently.")
     ap.add_argument("--skip-vectorize", action="store_true",
                     help="Reuse an existing vectorised tree and only apply the statistics")
+    ap.add_argument("--qcd-files-per-split", type=int, default=QCD_FILES_PER_SPLIT,
+                    help="QCD files in each split. has_enough_events needs every split to reach "
+                         "the configured per-class count: 7 files cover the 50,000 of "
+                         "new_exp/anomaly_case_v2_smnorm, 3 the 5,000 of the first production.")
+    ap.add_argument("--experiment", default=EXPERIMENT,
+                    help="Experiment config naming the source directory, the processes and "
+                         "the dataset label (new_exp/anomaly_case_smnorm for the first production)")
     a = ap.parse_args()
 
     # A tree built without the filter is a different dataset, so it gets its own
     # label: reusing the same one would silently overwrite the filtered tree.
-    dst_label = DST_LABEL.replace("nosparse", "sparse") if a.keep_empty else DST_LABEL
-    cfg = _compose_cfg("anomaly_detection.yaml", [f"experiment={EXPERIMENT}"])
+    cfg = _compose_cfg("anomaly_detection.yaml", [f"experiment={a.experiment}"])
+    # The label comes from the config, so a second source (collide_v2) writes its own
+    # tree instead of overwriting the published one.
+    dst_label = str(cfg.data.label)
+    dst_label = dst_label.replace("nosparse", "sparse") if a.keep_empty else dst_label
     classnames = list(cfg.data.to_classify)
     p2f = OmegaConf.to_container(cfg.data.process_to_folder, resolve=True)
     folder = {c: p2f[c] for c in classnames}
@@ -133,7 +152,7 @@ def main() -> int:
 
     from src.data.utils import load_global_filelist
     event_db = load_global_filelist()
-    manifest = build_manifest(base_dir, folder, classnames, event_db)
+    manifest = build_manifest(base_dir, folder, classnames, event_db, a.qcd_files_per_split)
 
     print(f"source        : {base_dir}")
     print(f"processes     : {len(classnames)}")

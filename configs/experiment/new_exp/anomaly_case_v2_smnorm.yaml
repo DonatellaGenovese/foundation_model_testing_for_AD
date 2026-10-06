@@ -1,0 +1,151 @@
+# @package _global_
+#
+# CASE held-out signals for anomaly detection — SM-only normalisation, collide_v2.
+#
+# Same as new_exp/anomaly_case_smnorm but on the collide_v2 production, which has
+# 50,000 events per signal (5 parquets of 10,000) instead of 5,000 (one parquet).
+# Different random seeds, so these are new events, not a superset of the old ones.
+# The tree carries its own label, leaving the published one untouched.
+#
+# Same contract as new_exp/anomaly_newsig_smnorm: inference only, on processes that
+# played no part in training, normalisation or threshold calibration. What differs is
+# the provenance and the splitting.
+#
+# Provenance: these come from /eos/cms/store/group/phys_b2g/CASE/collide_v2, a
+# different production than the rest of the dataset. Their parquet files carry 262
+# columns against our 271 — the nine missing ones are all AK8 jet-constituent lists,
+# none of which this pipeline reads. All 29 columns below were verified present in
+# every one of the 45 processes there, and the element types match; only the Arrow
+# inner-list field name differs (`item` vs `element`), which awkward absorbs.
+# `paths.dataset_dir` therefore points at a directory of symlinks gathering the CASE
+# folders next to QCD_HT50toInf, so a single base_dir covers both productions.
+#
+# Splitting: each CASE process has five parquets of 10,000 events, while
+# make_split_manifest assigns whole files greedily train -> val -> test, so they would
+# be spread over the three splits instead of all landing in test. The manifest is therefore built by
+# scripts/prepare_case_smnorm.py, which lists each signal file in all three splits:
+# has_enough_events refuses to build the datamodule if any (split, class) pair has no
+# files, so test-only is not an option. Only the test split is ever read downstream.
+#
+# Class indices (order of to_classify):
+#   normal   : [0]               — QCD_inclusive, the AE's trained normality
+#   anomaly  : [1, 2, 3]         — the three CASE processes the paper reports
+#
+# Labels are positions in to_classify, written as integers into every `_y.npy`. The
+# study scored four more CASE processes that the paper does not report; they sat at
+# the END of this list, so removing them left the three kept here on labels 1-3 --
+# the labels a tree built before the selection already carries. Such a tree therefore
+# still reads correctly through this config. Remove or reorder entries anywhere else
+# and that stops being true: give the dataset a new `data.label` instead.
+
+defaults:
+  - override /data: collide2v_basic
+  - override /paths: fm_testing
+
+mode: "embedding"
+
+ckpt_path: null
+
+model_class: "src.models.collide2v_vicreg.COLLIDE2VVCRegLitModule"
+
+embedding_output_dir: "${paths.output_dir}/embeddings"
+
+use_projections: false
+
+tags: ["anomaly_detection", "case_signals", "inference", "cern", "nosparse", "smnorm"]
+
+normal_classes: [0]
+anomaly_classes: [1, 2, 3]
+
+paths:
+  dataset_dir: /eos/user/d/dgenoves/foundation_model_testing_data/_case_src_v2
+
+data:
+  batch_size: 512
+  # 50_000 is all each CASE signal has (five parquets). The value is also
+  # LocalVectorDataset's per_class_limit, so it caps QCD at 50_000 per split too;
+  # QCD here only measures the achieved false-positive rate, since the threshold
+  # comes from val_thresholds in the AE checkpoint.
+  train_val_test_split_per_class: [50_000, 50_000, 50_000]
+  label: "v3_nosparse_case_smnorm_highlevel"
+  # ONE worker on purpose. Each loader worker stops at ceil(limit / num_workers)
+  # events per class and the signals have five shards, so 32 workers would read
+  # 5 x ceil(50_000/32) = 7,815 of the 50,000 events. With one worker all of them
+  # are read, in shard then row order.
+  num_workers: 1
+
+  to_classify:
+    - "QCD_inclusive"                 # 0 — normal (AE trained on this)
+    - "hToAA_4b_ma60"                 # 1 — h->aa->4b, resolved b-jets
+    - "hToAA_4tau_ma15"               # 2 — h->aa->4tau
+    - "HVdilep_Zp1000_piD2_mumu"      # 3 — hidden valley, dimuon-rich
+
+  # Folder names equal process names for the CASE samples, so the mapping is the
+  # identity there; QCD_inclusive keeps the mapping inherited from collide2v_basic.
+  process_to_folder:
+    "hToAA_4b_ma60": "hToAA_4b_ma60"
+    "hToAA_4tau_ma15": "hToAA_4tau_ma15"
+    "HVdilep_Zp1000_piD2_mumu": "HVdilep_Zp1000_piD2_mumu"
+
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+        - FullReco_JetPuppiAK4_NNeutrals
+      topk: 12
+      count: true
+
+    electrons:
+      cols:
+        - FullReco_Electron_PT
+        - FullReco_Electron_Eta
+        - FullReco_Electron_Phi
+        - FullReco_Electron_Charge
+        - FullReco_Electron_EhadOverEem
+        - FullReco_Electron_IsolationVarRhoCorr
+        - FullReco_Electron_D0
+        - FullReco_Electron_DZ
+      topk: 8
+      count: false
+
+    muons:
+      cols:
+        - FullReco_MuonTight_PT
+        - FullReco_MuonTight_Eta
+        - FullReco_MuonTight_Phi
+        - FullReco_MuonTight_Charge
+        - FullReco_MuonTight_IsolationVarRhoCorr
+        - FullReco_MuonTight_D0
+        - FullReco_MuonTight_DZ
+      topk: 8
+      count: false
+
+    photons:
+      cols:
+        - FullReco_PhotonTight_PT
+        - FullReco_PhotonTight_Eta
+        - FullReco_PhotonTight_Phi
+        - FullReco_PhotonTight_EhadOverEem
+        - FullReco_PhotonTight_IsolationVarRhoCorr
+      topk: 8
+      count: false
+
+    puppi_met:
+      cols:
+        - FullReco_PUPPIMET_MET
+        - FullReco_PUPPIMET_Phi
+      topk: null
+      count: false
+
+preprocess:
+  enabled: false
+
+logger:
+  mlflow:
+    run_name: "anomaly_case_smnorm"
+    experiment_name: "anomaly_detection"

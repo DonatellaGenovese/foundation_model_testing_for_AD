@@ -90,6 +90,25 @@ DATASETS = {
         "classes": {0: "QCD_inclusive", 1: "hToAA_4b_ma60", 2: "hToAA_4tau_ma15",
                     3: "HVdilep_Zp1000_piD2_mumu"},
     },
+    # The same three CASE processes from the collide_v2 production, which holds 50,000
+    # events per signal against 5,000. Different seeds, so different events: this is a
+    # new measurement of the same quantities, not more of the old one. The paper's
+    # held-out table is this set.
+    "case_v2": {
+        "experiment": "new_exp/anomaly_case_v2_smnorm",
+        "emb_root":   "case_v2_embeddings",
+        "out_root":   "ad_results_case_v2",
+        "classes": {0: "QCD_inclusive", 1: "hToAA_4b_ma60", 2: "hToAA_4tau_ma15",
+                    3: "HVdilep_Zp1000_piD2_mumu"},
+        # The events the paper scores: 20,000 per signal drawn by scripts/select_case_events.py
+        # (seed 42), the statistics of the proxy signals, and the QCD reference HH->4b was
+        # scored against. Passing --select or --qcd-reference overrides them.
+        "selections": {1: "/eos/user/d/dgenoves/foundation_model_testing_data/v3_nosparse_case_smnorm_highlevel/selections/hToAA_4b_ma60_random.npz",
+                       2: "/eos/user/d/dgenoves/foundation_model_testing_data/v3_nosparse_case_smnorm_highlevel/selections/hToAA_4tau_ma15_random.npz",
+                       3: "/eos/user/d/dgenoves/foundation_model_testing_data/v3_nosparse_case_smnorm_highlevel/selections/HVdilep_Zp1000_piD2_mumu_random.npz"},
+        "qcd_reference": "proxy",
+        "out_sub": "random",
+    },
     # The three proxy signals of the main table, scored the same way. Their embeddings
     # are the ones the AD stage already wrote next to the autoencoder it trained, so
     # `emb_root` points there and nothing is extracted again; the labels kept in that
@@ -165,11 +184,23 @@ def main() -> int:
                     help="Where the embeddings are read from, or written if absent")
     ap.add_argument("--out-dir", type=Path, default=None,
                     help="Where result_<dataset>.json is written")
+    ap.add_argument("--qcd-reference", choices=["dataset", "proxy"], default=None,
+                    help="Where the QCD events AUROC and the measured FPR are computed on come from: "
+                         "the scored dataset's own test split, or 'proxy', the 20,000 QCD test events "
+                         "the main table's proxy signals (HH->4b, ...) were scored against, embedded by "
+                         "the same encoder. 'proxy' makes the rows of the two tables share a reference.")
+    ap.add_argument("--select", action="append", default=[], metavar="LABEL=FILE",
+                    help="Score only the events an npz from scripts/select_case_events.py lists, "
+                         "for the class with that label; repeatable. Positions are counted among "
+                         "that class's test events, the order the extraction writes them in.")
     a = ap.parse_args()
 
     spec = MODELS[a.model]
     ds = DATASETS[a.dataset]
     EXPERIMENT, CLASS_NAMES = ds["experiment"].format(model=a.model), ds["classes"]
+    if not a.select:
+        a.select = [f"{lbl}={path}" for lbl, path in ds.get("selections", {}).items()]
+    a.qcd_reference = a.qcd_reference or ds.get("qcd_reference", "dataset")
     if a.seed not in spec["seeds"]:
         print(f"Seed {a.seed} is not one of the {a.model} seeds {spec['seeds']}")
         return 1
@@ -179,7 +210,7 @@ def main() -> int:
     ad_dir = NEW_EXP / "ad_results" / run / f"encoder_seed_{a.seed}"
     ae_ckpt = a.ae_ckpt or find_ae_ckpt(ad_dir)
     emb_dir = a.emb_dir or (NEW_EXP / ds["emb_root"] / run / f"encoder_seed_{a.seed}" / "embeddings")
-    out_dir = a.out_dir or (NEW_EXP / ds["out_root"] / run / f"encoder_seed_{a.seed}")
+    out_dir = a.out_dir or (NEW_EXP / ds["out_root"] / run / f"encoder_seed_{a.seed}" / ds.get("out_sub", ""))
 
     enc_ckpt = a.encoder_ckpt or find_best_ckpt(seed_dir)
     print(f"dataset     : {a.dataset}  ({EXPERIMENT})")
@@ -213,6 +244,40 @@ def main() -> int:
     d = np.load(emb_dir / "test_embeddings.npz")
     Z, y = d["embeddings"], d["labels"]
     print(f"\ntest embeddings: {Z.shape}")
+    selections = {}
+    if a.select:
+        keep = np.ones(len(y), bool)
+        for sel in a.select:
+            lbl, path = sel.split("=", 1)
+            lbl = int(lbl)
+            idx = np.load(path)["index"].astype(int)
+            pos = np.flatnonzero(y == lbl)
+            if len(pos) == 0:
+                print(f"--select {sel}: no events with label {lbl} in the embeddings")
+                return 1
+            if idx.max() >= len(pos):
+                print(f"--select {sel}: index {idx.max()} for {len(pos):,} events of label {lbl}")
+                return 1
+            mask = np.zeros(len(pos), bool)
+            mask[idx] = True
+            keep[pos[~mask]] = False
+            selections[lbl] = str(path)
+            print(f"  label {lbl}: {len(idx):,} of {len(pos):,} events selected ({Path(path).name})")
+        Z, y = Z[keep], y[keep]
+        print(f"after selection: {Z.shape}")
+    qcd_source = str(emb_dir / "test_embeddings.npz")
+    if a.qcd_reference == "proxy":
+        pf = ad_dir / "embeddings" / "test_embeddings.npz"
+        if not pf.exists():
+            print(f"--qcd-reference proxy: missing {pf}")
+            return 1
+        pd_ = np.load(pf)
+        q = pd_["embeddings"][pd_["labels"] == NORMAL_LABEL]
+        n_own = int((y == NORMAL_LABEL).sum())
+        Z = np.concatenate([Z[y != NORMAL_LABEL], q], axis=0)
+        y = np.concatenate([y[y != NORMAL_LABEL], np.full(len(q), NORMAL_LABEL, dtype=y.dtype)])
+        qcd_source = str(pf)
+        print(f"QCD reference: {len(q):,} events from {pf} (replacing {n_own:,} of the dataset's own)")
     mse = compute_ae_mse(ae_ckpt, Z)
     thresholds = {float(k): float(v) for k, v in load_val_thresholds(ae_ckpt).items()}
     if not thresholds:
@@ -285,6 +350,7 @@ def main() -> int:
         "encoder_ckpt": str(enc_ckpt), "ae_ckpt": str(ae_ckpt),
         "experiment": EXPERIMENT, "inference_only": True,
         "class_names": CLASS_NAMES, "summary": rows, "per_signal": metrics,
+        "selections": selections, "qcd_reference": a.qcd_reference, "qcd_source": qcd_source,
     }, indent=2))
     print(f"\nSaved {out_dir}/result_{a.dataset}.json")
     return 0

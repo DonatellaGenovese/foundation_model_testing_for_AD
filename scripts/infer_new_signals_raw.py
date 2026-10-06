@@ -61,7 +61,26 @@ DATASETS = {
         "classes": {0: "QCD_inclusive", 1: "hToAA_4b_ma60", 2: "hToAA_4tau_ma15",
                     3: "HVdilep_Zp1000_piD2_mumu"},
     },
+    # The same CASE processes from the collide_v2 production (50,000 events per signal),
+    # the paper's held-out table, with the same selections as infer_new_signals.py.
+    "case_v2": {
+        "experiment": "new_exp/anomaly_case_v2_smnorm",
+        "out_root":   "ad_results_case_v2",
+        "classes": {0: "QCD_inclusive", 1: "hToAA_4b_ma60", 2: "hToAA_4tau_ma15",
+                    3: "HVdilep_Zp1000_piD2_mumu"},
+        # The events the paper scores: 20,000 per signal drawn by scripts/select_case_events.py
+        # (seed 42), the statistics of the proxy signals, and the QCD reference HH->4b was
+        # scored against. Passing --select or --qcd-reference overrides them.
+        "selections": {1: "/eos/user/d/dgenoves/foundation_model_testing_data/v3_nosparse_case_smnorm_highlevel/selections/hToAA_4b_ma60_random.npz",
+                       2: "/eos/user/d/dgenoves/foundation_model_testing_data/v3_nosparse_case_smnorm_highlevel/selections/hToAA_4tau_ma15_random.npz",
+                       3: "/eos/user/d/dgenoves/foundation_model_testing_data/v3_nosparse_case_smnorm_highlevel/selections/HVdilep_Zp1000_piD2_mumu_random.npz"},
+        "qcd_reference": "proxy",
+        "out_sub": "random",
+    },
 }
+# The experiment the published raw baseline was trained and evaluated with; its test QCD
+# is the reference the raw HH->4b row was scored against (RawNpyDataModule, seed 42).
+RAW_PROXY_EXPERIMENT = "anomaly_qcd_vs_higgs_raw_smnorm_nosparse_cern"
 NORMAL_LABEL = 0
 
 
@@ -85,18 +104,46 @@ def load_test_features(out_dir: Path, experiment: str) -> tuple[np.ndarray, np.n
     return np.concatenate(xs), np.concatenate(ys)
 
 
+def load_proxy_qcd(out_dir: Path) -> np.ndarray:
+    """The QCD test events the raw HH->4b row was scored against, rebuilt the way
+    run_raw_ae_baseline builds them: RawNpyDataModule over the same tree and split size,
+    with its default seed."""
+    from src.data.raw_npy_datamodule import RawNpyDataModule
+    cfg = _compose_cfg("anomaly_detection.yaml", [f"experiment={RAW_PROXY_EXPERIMENT}"], output_dir=out_dir)
+    names = list(cfg.data.to_classify)
+    p2f = dict(cfg.data.get("process_to_folder", {}))
+    dm = RawNpyDataModule(
+        preprocessed_dir=Path(cfg.paths.eos_data_dir) / cfg.data.label / "preprocessed",
+        normal_classes=list(cfg.normal_classes), anomaly_classes=[],
+        class_folders={i: p2f.get(n, n) for i, n in enumerate(names)},
+        n_train=1, n_val=1, n_test=list(cfg.data.train_val_test_split_per_class)[2],
+        batch_size=cfg.data.batch_size)
+    dm.setup("test")
+    x, y = dm.test_ds.tensors
+    return x[y == NORMAL_LABEL].numpy()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=1337, choices=SEEDS)
     ap.add_argument("--dataset", default="newsig", choices=list(DATASETS),
                     help="Which held-out signal set to score")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--select", action="append", default=[], metavar="LABEL=FILE",
+                    help="Score only the events an npz from scripts/select_case_events.py lists, "
+                         "for the class with that label; repeatable")
+    ap.add_argument("--qcd-reference", choices=["dataset", "proxy"], default=None,
+                    help="'proxy': score against the QCD test events of the published raw HH->4b row")
+    ap.add_argument("--out-dir", type=Path, default=None)
     a = ap.parse_args()
 
     ds = DATASETS[a.dataset]
     EXPERIMENT, CLASS_NAMES = ds["experiment"], ds["classes"]
+    if not a.select:
+        a.select = [f"{lbl}={path}" for lbl, path in ds.get("selections", {}).items()]
+    a.qcd_reference = a.qcd_reference or ds.get("qcd_reference", "dataset")
     ckpt = find_ckpt(a.seed)
-    out_dir = NEW_EXP / ds["out_root"] / "raw" / f"seed_{a.seed}"
+    out_dir = a.out_dir or (NEW_EXP / ds["out_root"] / "raw" / f"seed_{a.seed}" / ds.get("out_sub", ""))
     print(f"dataset  : {a.dataset}  ({EXPERIMENT})")
     print(f"strategy : {STRATEGY}   seed: {a.seed}")
     print(f"AE       : {ckpt}")
@@ -110,6 +157,29 @@ def main() -> int:
 
     X, y = load_test_features(out_dir, EXPERIMENT)
     print(f"\ntest features: {X.shape}")
+    selections = {}
+    if a.select:
+        keep = np.ones(len(y), bool)
+        for sel in a.select:
+            lbl, path = sel.split("=", 1)
+            lbl = int(lbl)
+            idx = np.load(path)["index"].astype(int)
+            pos = np.flatnonzero(y == lbl)
+            if len(pos) == 0 or idx.max() >= len(pos):
+                print(f"--select {sel}: {len(pos):,} events of label {lbl}, index up to {idx.max()}")
+                return 1
+            mask = np.zeros(len(pos), bool)
+            mask[idx] = True
+            keep[pos[~mask]] = False
+            selections[lbl] = str(path)
+            print(f"  label {lbl}: {len(idx):,} of {len(pos):,} events selected")
+        X, y = X[keep], y[keep]
+    if a.qcd_reference == "proxy":
+        q = load_proxy_qcd(out_dir)
+        print(f"QCD reference: {len(q):,} events of {RAW_PROXY_EXPERIMENT} "
+              f"(replacing {int((y == NORMAL_LABEL).sum()):,} of the dataset's own)")
+        X = np.concatenate([X[y != NORMAL_LABEL], q.astype(X.dtype)])
+        y = np.concatenate([y[y != NORMAL_LABEL], np.full(len(q), NORMAL_LABEL, dtype=y.dtype)])
 
     expected = torch.load(ckpt, map_location="cpu", weights_only=False) \
         .get("hyper_parameters", {}).get("input_dim")
@@ -179,6 +249,7 @@ def main() -> int:
         "model": "raw", "strategy": STRATEGY, "seed": a.seed, "ae_ckpt": str(ckpt),
         "experiment": EXPERIMENT, "inference_only": True,
         "class_names": CLASS_NAMES, "summary": rows, "per_signal": metrics,
+        "selections": selections, "qcd_reference": a.qcd_reference,
     }, indent=2))
     print(f"\nSaved {out_dir}/result_{a.dataset}.json")
     return 0

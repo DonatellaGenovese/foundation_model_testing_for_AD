@@ -1,0 +1,29 @@
+# ================================
+# Condor: full-SM embedding extraction for the remaining VCReg d256 seeds
+#   condor_submit scripts/xai/submit/extract_xai_emb_seeds.sub
+#
+# extract_xai_emb.sub covers seed 3, the one the XAI pipeline reads. The other four
+# are needed to quote, as mean ± std over the five seeds, the fraction of each SM
+# process above the QCD 10% threshold (scripts/xai/sm_acceptance.py).
+# ================================
+
+executable = scripts/xai/submit/wrapper_extract_xai_emb.sh
+arguments  = $(ClusterId)
+
+log_dir = /afs/cern.ch/user/d/dgenoves/foundation_model_testing_for_AD/logs/condor_logs/xai
+output  = $(log_dir)/extract_xai_emb_d$(DMODEL)_seed$(SEED)_$(ClusterId).out
+error   = $(log_dir)/extract_xai_emb_d$(DMODEL)_seed$(SEED)_$(ClusterId).err
+log     = $(log_dir)/extract_xai_emb_d$(DMODEL)_seed$(SEED)_$(ClusterId).log
+
+run_as_owner   = True
++JobFlavour    = "tomorrow"
+getenv         = True
+request_cpus   = 8
+request_gpus   = 1
+request_memory = 32768
+Requirements   = (TARGET.GPUs_GlobalMemoryMb >= 16000)
+
+DMODEL = 256
+environment = "SEED=$(SEED) DMODEL=$(DMODEL) OMP_NUM_THREADS=8 MKL_NUM_THREADS=8"
+
+queue SEED in (0 1 2 4)

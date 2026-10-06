@@ -252,11 +252,12 @@ def main():
     anomalous = flag_anomalies(mse, ae_thr)
     print(f"AE threshold={ae_thr:.6f} ({thr_src})")
 
-    # Global per-observable scale, computed exactly as in step 04 (std over all
-    # finite matched values) so the two steps produce comparable rankings.
+    # Per-observable scale, computed exactly as in step 04 (std over the SM events of the
+    # matched array, finite values only) so the two steps produce comparable rankings.
+    sm_rows = np.isin(y, SM_INDICES)
     phys_scale = {}
     for var in PHYSICS_VARS:
-        vals = phys[var][np.isfinite(phys[var])]
+        vals = phys[var][sm_rows & np.isfinite(phys[var])]
         phys_scale[var] = float(np.std(vals)) if len(vals) else float("nan")
 
     pca = None

@@ -349,8 +349,8 @@ def wasserstein_rows(
 ) -> list[dict]:
     """Per variable, standardised Wasserstein-1 of flagged (and missed) signal
     against two reference backgrounds within this component. Each observable is
-    scaled by its global standard deviation (`phys_scale`) so distances are
-    comparable across observables (raw W1 would rank by unit magnitude).
+    scaled by its standard deviation over the SM events (`phys_scale`) so distances
+    are comparable across observables (raw W1 would rank by unit magnitude).
 
     THE RANK IS TAKEN AGAINST ALL LOCAL SM, NOT AGAINST LOCAL QCD. The mixture is
     fitted on the Standard Model and every component is characterised by its own SM
@@ -628,11 +628,17 @@ def main():
     # Label-free physics characterisation of every GMM component (paper 3.3 pt 3)
     plot_physics_per_component(phys, assign, mask_sm, k, plots / "physics_per_component.pdf")
 
-    # Global per-observable scale (std over all finite matched values) so the
-    # Wasserstein ranking is comparable across observables, not by unit magnitude.
+    # Per-observable scale, so the Wasserstein ranking is comparable across observables
+    # rather than ordered by unit magnitude: the standard deviation over the SM events of
+    # the matched array (finite values only, so Mjj, |deta_jj| and MT use the events that
+    # define them). The signal is left out on purpose. Including it made the scale depend
+    # on how many signal events the array holds, and on how far the signal sits from the
+    # background: Z'->n(mumu) n_leptons read 4.76 with 4,984 signal events and 2.84 with
+    # 20,000, for the same physics. The SM block is the same 240,000 events in every
+    # matched array, so the scale is now shared by all signals.
     phys_scale = {}
     for var in PHYSICS_VARS:
-        vals = phys[var][np.isfinite(phys[var])]
+        vals = phys[var][mask_sm & np.isfinite(phys[var])]
         phys_scale[var] = float(np.std(vals)) if len(vals) else float("nan")
 
     counts = np.array([(assign[mask_flag] == i).sum() for i in range(k)], dtype=float)
@@ -708,7 +714,7 @@ def main():
         caption=(
             f"Wasserstein-1 distances between AE-flagged {sig_name_tex} and the local "
             f"Standard Model background within populated GMM components, standardised "
-            f"by each observable's global standard deviation and ranked by that "
+            f"by each observable's standard deviation over the SM and ranked by that "
             f"distance. The local QCD column, the autoencoder's "
             f"trained normality, is a control; it is undefined where the component "
             f"holds too few QCD events."

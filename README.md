@@ -11,7 +11,9 @@
 
 ## About
 
-Code for the paper *Diagnosing Learned Event Representations for Anomaly Detection in High-Luminosity LHC Searches*. Transformer encoders are trained on 12 Standard-Model process classes from COLLIDE-2V under four objectives (SupCon, SimCLR, VCReg, VICReg); the embeddings are frozen and a small autoencoder is trained on them, on QCD only, to flag signal processes as anomalies. A Gaussian mixture fitted on the SM latent space is then used to interpret *why* an event was flagged, by comparing flagged events with their local SM neighbourhood in physics space.
+Code for the paper *Local Diagnostics of Learned Event Representations for Anomaly Detection at the HL-LHC*. Transformer encoders are trained on 12 Standard-Model process classes from COLLIDE-2V under four objectives (SupCon, SimCLR, VCReg, VICReg); the embeddings are frozen and a small autoencoder is trained on them, on QCD only, to flag signal processes as anomalies. A Gaussian mixture fitted on the SM latent space is then used to interpret *why* an event was flagged, by comparing flagged events with their local SM neighbourhood in physics space.
+![Pipeline overview](assets/pipeline.png)
+
 
 Built on the data-loading and Lightning-Hydra scaffolding of
 [pploner/foundation_model_testing](https://github.com/pploner/foundation_model_testing),

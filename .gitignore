@@ -202,3 +202,6 @@ paper/**
 # Ad-hoc backups left beside the file they shadow (e.g. the event-count index kept
 # from before the CASE folders were scanned in). The live file is tracked; these are not.
 *.bak_*
+
+# Internal notes on why each group of retired code was archived; kept locally only.
+archive/README.md

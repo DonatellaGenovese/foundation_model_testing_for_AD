@@ -12,6 +12,7 @@
 ## About
 
 Code for the paper *Local Diagnostics of Learned Event Representations for Anomaly Detection at the HL-LHC*. Transformer encoders are trained on 12 Standard-Model process classes from COLLIDE-2V under four objectives (SupCon, SimCLR, VCReg, VICReg); the embeddings are frozen and a small autoencoder is trained on them, on QCD only, to flag signal processes as anomalies. A Gaussian mixture fitted on the SM latent space is then used to interpret *why* an event was flagged, by comparing flagged events with their local SM neighbourhood in physics space.
+
 ![Pipeline overview](assets/pipeline.png)
 
 
@@ -19,8 +20,6 @@ Built on the data-loading and Lightning-Hydra scaffolding of
 [pploner/foundation_model_testing](https://github.com/pploner/foundation_model_testing),
 itself based on the [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template).
 
-Retired code lives in [`archive/`](archive/README.md) with a note on why each group
-was set aside.
 
 ## Installation
 
@@ -30,11 +29,9 @@ cd foundation_model_testing_for_AD
 apptainer build fm_testing.sif fm_testing.def
 ```
 
-Behaviour is controlled through the Hydra configs in `configs/`; set defaults there
-and override only what changes in a `configs/experiment/*.yaml`.
+Behaviour is controlled through the Hydra configs in `configs/`; set defaults there and override only what changes in a `configs/experiment/*.yaml`.
 
-Every submitter below accepts `--dry-run`, which prints what would be submitted
-without touching the queue. **Use it first** (a full sweep is 20 GPU jobs.)
+Every submitter below accepts `--dry-run`, which prints what would be submitted without touching the queue. **Use it first** (a full sweep is 20 GPU jobs.)
 
 ---
 
@@ -44,9 +41,7 @@ Both stages come from
 [pploner/foundation_model_testing](https://github.com/pploner/foundation_model_testing),
 which this repository is built on. Transforms and normalisers are unchanged from it.
 
-Vectorisation reads the source `.parquet`, keeps the top-k objects per group (12 jets,
-8 electrons/muons/photons), zero-pads to a fixed length and appends each group's true
-multiplicity as a trailing scalar. Preprocessing then transforms and normalises the result. Output goes to `<label>/vectorized/` and `<label>/preprocessed/`; **a different set of options needs a different `label`**, or the existing tree is reused unchanged.
+Vectorisation reads the source `.parquet`, keeps the top-k objects per group (12 jets, 8 electrons/muons/photons), zero-pads to a fixed length and appends each group's true multiplicity as a trailing scalar. Preprocessing then transforms and normalises the result. Output goes to `<label>/vectorized/` and `<label>/preprocessed/`; **a different set of options needs a different `label`**, or the existing tree is reused unchanged.
 
 ### Preprocessing for pretraining and probe evaluation
 
@@ -69,8 +64,7 @@ python scripts/submit_preprocessing_jobs.py experiment=fm_testing_12class_nospar
 
 The filter drops events in which every jet, electron, muon and photon slot has `PT == 0`.
 
-This stage fits the normalisation statistics median and IQR per feature group and writes them to `<label>/preprocessed/norm_stats.json`. Everything downstream reuses
-that file.
+This stage fits the normalisation statistics median and IQR per feature group and writes them to `<label>/preprocessed/norm_stats.json`. Everything downstream reuses that file.
 
 ### Held-out signals
 
@@ -82,11 +76,8 @@ python scripts/prepare_newsig_smnorm.py          # QCD + HH->bbtautau
 condor_submit scripts/xai/submit/prepare_case.sub   # QCD + H->aa->4b, H->aa->4tau, Z'->n(mumu)
 ```
 
-The CASE signals come from the collide_v2 production, 50,000 events each. The paper
-uses 20,000 per signal, the same number as each proxy signal: the job draws them
-uniformly (seed 42) with `scripts/select_case_events.py` and writes the choice to
+The CASE signals come from the collide_v2 production, 50,000 events each. The paper uses 20,000 per signal, the same number as each proxy signal: the job draws them uniformly (seed 42) with `scripts/select_case_events.py` and writes the choice to
 `v3_nosparse_case_smnorm_highlevel/selections/`. Every later step reads it from there.
-By hand, the same job is:
 
 ```bash
 python scripts/prepare_case_smnorm.py
@@ -104,17 +95,15 @@ python scripts/submit_preprocessing_jobs.py experiment=<experiment> \
     preprocess.mode=apply_only preprocess.force=true
 ```
 
-If the source production changes, rescan the event map first:
-`has_enough_events` raises on a file it cannot look up:
+If the source production changes, rescan the event map first: `has_enough_events` raises on a file it cannot look up:
 
 ```bash
 python src/utils/nEvents_scan/scan_parquet_nevent.py
 ```
 
-### Or download the data instead
+## 2. Or download the data instead
 
-Stage 1 takes hours on the batch system, and its output is published: the vectorised and
-preprocessed 12-class trees, which are what training and the probes read.
+Stage 1 takes hours on the batch system, here we provide the instruction for download the data that we have just preprocessed and vectorized. 
 
 ```bash
 bash scripts/download_dataset.sh                 # both trees, about 44 GB
@@ -122,25 +111,19 @@ bash scripts/download_dataset.sh preprocessed    # only the preprocessed tree, 1
 bash scripts/download_dataset.sh vectorized      # only the vectorised tree, 26 GB
 ```
 
-They unpack into `data/v2_12class_nosparse_highlevel/`, and a run reads them by
-overriding one path:
+They unpack into `data/v2_12class_nosparse_highlevel/`, and a run reads them by overriding one path: 
 
 ```bash
 python src/train.py experiment=fm_testing_12class_nosparse_dmodel256_cern seed=7 \
     paths.eos_data_dir=$PWD/data
 ```
 
-Both trees are published because the data loader walks the vectorised tree before every
-run — it skips the shards that already exist — so with the preprocessed tree alone it
-would try to read the source production, which lives in a CERN project space
-(`paths.dataset_dir`).
+Both trees are needed, even though training reads only the preprocessed one: before every run the data loader checks the vectorised tree and rebuilds any missing shard from the source `.parquet` files (`paths.dataset_dir`), which are only reachable from CERN. With both trees in place every shard is found and nothing is rebuilt.
 
-The held-out signal trees above are not published in full. The test splits the
-interpretability stage needs come with its own package; see stage 4.
 
 ---
 
-## 2. Training
+## 3. Training
 
 Four encoders plus the supervised baseline, each over `d_model ∈ {32, 64, 128, 256}`
 and 5 seeds.
@@ -162,9 +145,11 @@ python src/train.py experiment=fm_testing_12class_nosparse_dmodel256_cern seed=7
 
 ---
 
-## 3. Probes and anomaly detection
+## 4. Probes and anomaly detection
 
 ### Linear probes
+
+The following jobs train and evaluate the linear probe over different models and a linear baseline.
 
 ```bash
 python scripts/new_exp/submit_eval_probes_new_exp.py \
@@ -173,25 +158,21 @@ python scripts/new_exp/submit_eval_probes_new_exp.py \
 condor_submit scripts/new_exp/raw_linear_probe_new_exp.sub    # raw-feature baseline
 ```
 
-One linear layer on the frozen embeddings; per-class and macro AUROC, aggregated over
-seeds into `aggregated_summary.json`. CE is not probed — being a classifier, its
-per-class AUROC comes from its own test predictions, which training writes to
-`seed_*/test_predictions/test_logits_and_labels.npz`:
+One linear layer on the frozen embeddings is used for probing; per-class and macro AUROC, aggregated over seeds are saved into `aggregated_summary.json`. 
 
+
+For the CE results you need to run the following script: 
 ```bash
 python scripts/aggregate_ce_auroc.py    # CE rows of Tables 4 and 8
 ```
 
-**Probing a published encoder.** The encoders the paper reports are published, so a
-probe can be run without training anything:
+**Probing a published encoder.** The encoders the paper reports are published, so a probe can be run without training anything: 
 
 ```bash
 bash scripts/download_weights.sh encoders     # 2.24 GB into data/weights/encoders/
 ```
 
-The file name carries the run — `<model>_d<dim>_seed<seed>.ckpt` — and the epoch the run
-stopped at is inside the checkpoint, together with the architecture. One probe is then
-one command:
+The file name carries the run: `<model>_d<dim>_seed<seed>.ckpt` and the epoch the run stopped at is inside the checkpoint, together with the architecture. 
 
 ```bash
 python src/eval_probes.py experiment=vcreg_12class_nosparse_dmodel256_cern \
@@ -200,17 +181,9 @@ python src/eval_probes.py experiment=vcreg_12class_nosparse_dmodel256_cern \
     paths.eos_data_dir=$PWD/data paths.output_dir=$PWD/outputs/probe_vcreg_d256_seed3
 ```
 
-`experiment=` selects the probe protocol — split, labels, dataset — not the architecture,
-which comes from the checkpoint. It is `new_exp/supcon_dmodel{dim}`,
-`new_exp/simclr_dmodel{dim}`, `new_exp/vicreg_dmodel{dim}` for the other three, and the
-one above for VCReg. Averaging the five seeds of a model is what
-`scripts/aggregate_probe_results.py` does, and its output is the
-`aggregated_summary.json` the tables read.
+`experiment=` selects the probe protocol: split, labels, dataset which comes from the checkpoint. It is `new_exp/supcon_dmodel{dim}`,
+`new_exp/simclr_dmodel{dim}`, `new_exp/vicreg_dmodel{dim}` for the other three, and the one above for VCReg. Averaging the five seeds of a model is what `scripts/aggregate_probe_results.py` does, and its output is the `aggregated_summary.json`.
 
-The seed sets differ per model: VCReg 0–4, SupCon and SimCLR 7/42/137/1337/31337, VICReg
-7/42/12345/1337/31337. Note also that the runs recorded in `probe_results/` and
-`ad_results/` name two directories that were later renamed: `selfsupcon` is SimCLR and
-`vicreg_stable` is VICReg.
 
 ### Anomaly detection, proxy signals
 
@@ -233,22 +206,16 @@ condor_submit scripts/xai/submit/newsig_raw.sub      # raw-feature baseline
 
 ### Anomaly detection, CASE signals
 
-Inference only: nothing is trained and no threshold is recalibrated, so these
-processes are held out in the strongest sense.
+Inference only: nothing is trained and no threshold is recalibrated, so these processes are held out in the strongest sense.
 
 ```bash
 condor_submit scripts/xai/submit/case_v2_ad.sub     # the four encoders
 condor_submit scripts/xai/submit/case_v2_raw.sub    # raw-feature baseline
 ```
 
-Each signal is scored on its 20,000 selected events (stage 1). The QCD reference is the
-one the proxy signals were scored against: the same QCD test events, scored by the same
+Each signal is scored on its 20,000 selected events (stage 1). The QCD reference is the one the proxy signals were scored against: the same QCD test events, scored by the same
 model, so the rows of the two tables share one background.
 
-Check the measured false-positive rate on QCD in the output: it confirms the
-transferred threshold still lands where it should — 0.098 ± 0.003 against a nominal
-0.10 for the encoders, 0.100 for the raw baseline. `python paper/make_heldout_bsm_table.py`
-then collects the seeds into the held-out table of the paper.
 
 ### Scoring with published weights
 
@@ -275,7 +242,7 @@ from CERN EOS.
 
 ---
 
-## 4. Interpretability
+## 5. Interpretability
 
 ### A. With the published embeddings and mixture (≈15 min, CPU)
 
@@ -284,11 +251,7 @@ bash scripts/download_xai_data.sh     # 3.4 GB into data/: embeddings, mixture, 
 jupyter nbconvert --to notebook --execute notebooks/xai_reproduce_load.ipynb
 ```
 
-The notebook builds the event arrays, runs steps 03, 04 and 06 with the published
-mixture, draws the figures and Table 6 into `outputs/xai_reproduce/figures/`, and checks
-every number against the paper. It does not refit the mixture, so the choice of K is not
-redone. It needs a Python environment with the repository's requirements and Jupyter:
-`fm_testing.sif` does not include Jupyter.
+The notebook builds the event arrays, runs steps 03, 04 and 06 with the published mixture (K = 7) and writes the figures and Tables of the paper to `outputs/xai_reproduce/figures/`. It loads the mixture, so the choice of K is not redone; route B below does that. It needs a Python environment with the repository's requirements and Jupyter.
 
 ### B. From the event lists (CERN batch system and EOS)
 

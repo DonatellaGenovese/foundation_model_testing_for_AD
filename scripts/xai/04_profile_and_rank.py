@@ -169,7 +169,6 @@ def plot_physics_per_component(
                     histtype="step", lw=1.2, color=cmap(ki), alpha=0.85)
         ax.set_xlabel(PHYSICS_LABELS[var], fontsize=9)
         ax.set_ylabel("Density", fontsize=8)
-        ax.set_title(var, fontsize=9)
         ax.tick_params(labelsize=7)
 
     for vi in range(n_vars, len(axes)):
